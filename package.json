@@ -1,0 +1,13 @@
+{
+  "name": "tool-trace",
+  "private": true,
+  "description": "Smart tool-tracking and calibration platform for factory floors",
+  "workspaces": ["apps/*"],
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "dev:api": "npm run dev -w apps/api",
+    "test": "npm test -w apps/api",
+    "typecheck": "npm run typecheck -w apps/api",
+    "build": "npm run build -w apps/api"
+  }
+}

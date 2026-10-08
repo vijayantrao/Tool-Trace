@@ -1,0 +1,38 @@
+# Local development stack:  docker compose up --build
+# Credentials here are for local use only and never reach production.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tooltrace
+      POSTGRES_PASSWORD: tooltrace_local_only
+      POSTGRES_DB: tooltrace
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tooltrace -d tooltrace"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgres://tooltrace:tooltrace_local_only@db:5432/tooltrace
+      APP_URL: http://localhost:3000
+      RP_ID: localhost
+      RP_ORIGINS: http://localhost:3000
+      COOKIE_SECURE: "false"
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
