@@ -14,7 +14,14 @@ const API_URL = (process.env.API_URL ?? 'http://localhost:8080').replace(/\/$/, 
 // Only these request headers are forwarded. Everything else is dropped.
 const FORWARD_REQUEST = ['cookie', 'content-type', 'origin', 'user-agent', 'sec-fetch-site', 'accept'];
 // Only these response headers are passed back to the browser (plus every Set-Cookie).
-const FORWARD_RESPONSE = ['content-type', 'cache-control', 'ratelimit-limit', 'ratelimit-remaining', 'retry-after'];
+const FORWARD_RESPONSE = [
+  'content-type',
+  'cache-control',
+  'ratelimit-limit',
+  'ratelimit-remaining',
+  'retry-after',
+  'x-accel-buffering',
+];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {
   const { path } = await ctx.params;
@@ -39,6 +46,8 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
       body: req.method === 'GET' || req.method === 'HEAD' ? undefined : await req.arrayBuffer(),
       redirect: 'manual',
       cache: 'no-store',
+      // Live event streams: when the browser goes away, close the upstream connection too.
+      signal: req.signal,
     });
   } catch {
     return Response.json(

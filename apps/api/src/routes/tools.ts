@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import type { TxSql } from '../db.js';
 import { conflict, notFound } from '../lib/errors.js';
+import { normalizeUid } from '../lib/uid.js';
 import { validate } from '../lib/validate.js';
 import { currentUser, requireAuth, requireRole } from '../middleware/session.js';
 import type { AppEnv, Deps } from '../types.js';
@@ -10,11 +11,20 @@ export const DUE_SOON_DAYS = 14;
 
 const idParam = z.object({ id: z.uuid() });
 const isoDate = z.iso.date();
+/** Accepts "c0:ff:ee:99", "C0 FF EE 99"... and normalises to "C0FFEE99". */
+const rfidUid = z
+  .string()
+  .max(40)
+  .transform((v, ctx) => {
+    const uid = normalizeUid(v);
+    if (!uid) ctx.addIssue({ code: 'custom', message: 'RFID tag must be 4, 7 or 10 bytes of hex, like 11:22:33:44' });
+    return uid ?? '';
+  });
 const assetTag = z.string().trim().regex(/^[A-Z0-9][A-Z0-9-]{2,31}$/, 'Use 3-32 uppercase letters, digits or dashes');
 
 /** Shared SELECT list. calibration_state is computed, never stored, so it can't go stale. */
 const toolColumns = (sql: Deps['sql']) => sql`
-  t.id, t.asset_tag, t.name, t.category, t.status,
+  t.id, t.asset_tag, t.name, t.category, t.status, t.rfid_uid,
   t.home_location_id, l.name AS home_location_name,
   t.requires_calibration, t.calibration_interval_days,
   t.last_calibrated_on::text AS last_calibrated_on,
@@ -125,6 +135,7 @@ export function toolRoutes({ sql }: Deps) {
           requiresCalibration: z.boolean().default(false),
           calibrationIntervalDays: z.number().int().min(1).max(3650).optional(),
           lastCalibratedOn: isoDate.optional(),
+          rfidUid: rfidUid.optional(),
         })
         .refine(
           (v) => !v.requiresCalibration || (v.calibrationIntervalDays && v.lastCalibratedOn),
@@ -135,9 +146,9 @@ export function toolRoutes({ sql }: Deps) {
       const b = c.req.valid('json');
       const cal = b.requiresCalibration;
       const [created] = await sql<{ id: string }[]>`
-        INSERT INTO tools (asset_tag, name, category, home_location_id, requires_calibration,
+        INSERT INTO tools (asset_tag, name, category, home_location_id, rfid_uid, requires_calibration,
                            calibration_interval_days, last_calibrated_on, calibration_due_on)
-        VALUES (${b.assetTag}, ${b.name}, ${b.category}, ${b.homeLocationId}, ${cal},
+        VALUES (${b.assetTag}, ${b.name}, ${b.category}, ${b.homeLocationId}, ${b.rfidUid ?? null}, ${cal},
                 ${cal ? b.calibrationIntervalDays! : null},
                 ${cal ? b.lastCalibratedOn! : null}::date,
                 ${cal ? b.lastCalibratedOn! : null}::date + ${cal ? b.calibrationIntervalDays! : 0}::int)
@@ -158,6 +169,8 @@ export function toolRoutes({ sql }: Deps) {
           category: z.string().trim().min(1).max(60).optional(),
           homeLocationId: z.uuid().optional(),
           status: z.enum(['available', 'quarantined', 'retired']).optional(),
+          /** RFID tag stuck on the tool, or null to remove it. */
+          rfidUid: rfidUid.nullable().optional(),
         })
         .refine((v) => Object.keys(v).length > 0, 'Nothing to update'),
     ),
@@ -175,7 +188,8 @@ export function toolRoutes({ sql }: Deps) {
             name = COALESCE(${b.name ?? null}, name),
             category = COALESCE(${b.category ?? null}, category),
             home_location_id = COALESCE(${b.homeLocationId ?? null}::uuid, home_location_id),
-            status = COALESCE(${b.status ?? null}::tool_status, status)
+            status = COALESCE(${b.status ?? null}::tool_status, status),
+            rfid_uid = CASE WHEN ${b.rfidUid !== undefined} THEN ${b.rfidUid ?? null} ELSE rfid_uid END
           WHERE id = ${id}`;
       });
       return c.json({ tool: await getTool({ id }) });

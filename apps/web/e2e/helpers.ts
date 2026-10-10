@@ -66,3 +66,41 @@ export async function expectAccessible(page: Page) {
   const summary = results.violations.map((v) => `${v.id}: ${v.help} (${v.nodes.length}) -> ${v.nodes[0]?.target}`);
   expect(summary, summary.join('\n')).toEqual([]);
 }
+
+/**
+ * A station for tests: signs taps over MQTT exactly like the ESP32 firmware
+ * (independent re-implementation of the documented format).
+ */
+export async function connectStation(stationId: string, keyHex: string, port: number) {
+  const { createHmac } = await import('node:crypto');
+  const mqtt = (await import('mqtt')).default;
+  const client = await mqtt.connectAsync(`mqtt://127.0.0.1:${port}`, { clientId: `e2e-station-${stationId.slice(0, 8)}` });
+  const replies = `tooltrace/v1/stations/${stationId}/replies`;
+  await client.subscribeAsync(replies, { qos: 1 });
+  let seq = Date.now();
+  const hmac = (s: string) => createHmac('sha256', Buffer.from(keyHex, 'hex')).update(s).digest('hex');
+
+  const publish = async (msg: Record<string, unknown>) => {
+    const answer = new Promise<{ l1: string; l2: string; ok: boolean } | null>((resolve) => {
+      const t = setTimeout(() => resolve(null), 3000);
+      client.once('message', (_topic, payload) => {
+        clearTimeout(t);
+        resolve(JSON.parse(payload.toString()));
+      });
+    });
+    await client.publishAsync(`tooltrace/v1/stations/${stationId}/events`, JSON.stringify(msg), { qos: 1 });
+    return answer;
+  };
+
+  return {
+    tap: (uid: string, flag: 'ok' | 'problem' = 'ok') => {
+      seq = Math.max(Date.now(), seq + 1);
+      return publish({ v: 1, seq, type: 'tap', uid, flag, sig: hmac(`v1|${stationId}|${seq}|tap|${uid}|${flag}`) });
+    },
+    forge: (uid: string) => {
+      seq = Math.max(Date.now(), seq + 1);
+      return publish({ v: 1, seq, type: 'tap', uid, flag: 'ok', sig: 'f'.repeat(64) });
+    },
+    close: () => client.endAsync(),
+  };
+}

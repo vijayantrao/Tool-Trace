@@ -7,11 +7,17 @@ import { loadSession } from './middleware/session.js';
 import { authRoutes } from './routes/auth.js';
 import { checkoutRoutes } from './routes/checkouts.js';
 import { dashboardRoutes } from './routes/dashboard.js';
+import { eventRoutes } from './routes/events.js';
+import { stationRoutes } from './routes/stations.js';
 import { toolRoutes } from './routes/tools.js';
 import { userRoutes } from './routes/users.js';
+import { StationGateway } from './stations/gateway.js';
 import type { AppEnv, Deps } from './types.js';
 
-export function createApp(deps: Deps) {
+export function createApp(
+  input: Omit<Deps, 'gateway'> & { gateway?: Deps['gateway']; sseHeartbeatMs?: number },
+) {
+  const deps: Deps = { ...input, gateway: input.gateway ?? new StationGateway(input.sql, input.config) };
   const { sql, config } = deps;
   const app = new Hono<AppEnv>();
 
@@ -50,6 +56,8 @@ export function createApp(deps: Deps) {
   api.route('/', toolRoutes(deps));
   api.route('/', checkoutRoutes(deps));
   api.route('/', dashboardRoutes(deps));
+  api.route('/', stationRoutes(deps));
+  api.route('/', eventRoutes(deps, input.sseHeartbeatMs));
   app.route('/api', api);
 
   app.notFound((c) => errorResponse(c, notFound('Route')));

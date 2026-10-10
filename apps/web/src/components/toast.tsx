@@ -1,9 +1,9 @@
 'use client';
 
-import { CheckCircle2, CircleAlert } from 'lucide-react';
+import { CheckCircle2, CircleAlert, Radio } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-type Toast = { id: number; text: string; tone: 'ok' | 'error' };
+type Toast = { id: number; text: string; tone: 'ok' | 'error' | 'info' };
 type Listener = (t: Toast) => void;
 
 const listeners = new Set<Listener>();
@@ -39,10 +39,16 @@ export function Toaster() {
           key={t.id}
           role="status"
           className={`pointer-events-auto flex max-w-md items-center gap-2 rounded-lg px-4 py-3 text-sm font-medium shadow-lg ${
-            t.tone === 'ok' ? 'bg-machine text-machine-ink' : 'bg-signal text-white'
+            { ok: 'bg-machine text-machine-ink', error: 'bg-signal text-white', info: 'bg-ink text-panel' }[t.tone]
           }`}
         >
-          {t.tone === 'ok' ? <CheckCircle2 className="size-4 shrink-0" /> : <CircleAlert className="size-4 shrink-0" />}
+          {t.tone === 'ok' ? (
+            <CheckCircle2 className="size-4 shrink-0" />
+          ) : t.tone === 'info' ? (
+            <Radio className="size-4 shrink-0" />
+          ) : (
+            <CircleAlert className="size-4 shrink-0" />
+          )}
           {t.text}
         </div>
       ))}

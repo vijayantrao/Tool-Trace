@@ -57,3 +57,6 @@ export const initials = (name: string) =>
     .slice(0, 2)
     .map((p) => p[0]!.toUpperCase())
     .join('');
+
+/** C0FFEE99 -> C0:FF:EE:99 */
+export const formatUid = (uid: string | null) => (uid ? uid.match(/.{2}/g)!.join(':') : '');

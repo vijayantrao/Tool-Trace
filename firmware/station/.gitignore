@@ -1,0 +1,4 @@
+.pio/
+include/config.h
+test/host/test_core
+test/host/vectors.h

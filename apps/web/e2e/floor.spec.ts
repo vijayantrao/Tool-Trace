@@ -5,7 +5,8 @@
  * damaged, quarantines it, recalibrates it, and access is revoked.
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { acceptInvite, expectAccessible, personWithPasskey, shot, SHOTS, state } from './helpers';
+import { MQTT_PORT } from '../playwright.config';
+import { acceptInvite, connectStation, expectAccessible, personWithPasskey, shot, SHOTS, state } from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -155,6 +156,70 @@ test('storekeeper adds a tool and prints its QR label', async () => {
   await page.getByRole('link', { name: 'Print QR label' }).click();
   await expect(page.getByAltText('QR code for TW-0199')).toBeVisible();
   await expect(page.getByAltText(/QR code for/)).toHaveCount(1);
+});
+
+let station: Awaited<ReturnType<typeof connectStation>>;
+
+test('admin sets up a station and gives the technician a badge', async () => {
+  const { page } = admin;
+  await page.goto('/stations');
+  await page.getByLabel('Station name').fill('Crib Station 1');
+  await page.getByRole('button', { name: 'Add station' }).click();
+  const config = await page.getByLabel('Firmware settings').textContent();
+  const id = config!.match(/STATION_ID "([^"]+)"/)![1]!;
+  const key = config!.match(/STATION_KEY_HEX "([0-9a-f]{64})"/)![1]!;
+  await expect(page.getByLabel('Simulator command')).toContainText(`--id ${id} --key ${key}`);
+  await page.getByRole('button', { name: "I've saved it" }).click();
+  station = await connectStation(id, key, MQTT_PORT);
+
+  await page.goto('/people');
+  const row = page.getByRole('listitem').filter({ hasText: 'Asha Verma' });
+  await row.getByRole('button', { name: 'Assign badge' }).click();
+  await row.getByLabel('Badge ID').fill('c0 ff ee 99');
+  await row.getByRole('button', { name: 'Save' }).click();
+  await expect(row.getByText('C0:FF:EE:99')).toBeVisible();
+});
+
+test('a badge and a tool tapped at the station appear live on the storekeeper board', async () => {
+  const { page } = storekeeper;
+  await page.goto('/');
+  await expect(page.getByRole('status', { name: 'Live updates: live' }).first()).toBeVisible();
+  const slot = page.getByRole('link', { name: /^TW-0101 / });
+  await expect(slot).toHaveAccessibleName(/in the crib/);
+
+  expect(await station.tap('11223344')).toMatchObject({ ok: false, l1: 'Tap your badge' });
+  expect(await station.tap('C0FFEE99')).toMatchObject({ ok: true, l1: 'Hi Asha' });
+  expect(await station.tap('11223344')).toMatchObject({ ok: true, l1: 'TW-0101 is yours' });
+
+  // No reload: the board and a notice update by themselves.
+  await expect(page.getByText('Asha Verma checked out TW-0101 at Crib Station 1')).toBeVisible();
+  await expect(slot).toHaveAccessibleName(/checked out to Asha Verma/);
+
+  expect(await station.tap('AABBCCDD')).toMatchObject({ ok: false, l1: 'LOCKED' });
+  expect(await station.tap('11223344')).toMatchObject({ ok: true, l1: 'TW-0101 returned' });
+  await expect(slot).toHaveAccessibleName(/in the crib/);
+});
+
+test('a check-out made in one browser appears live in another', async () => {
+  await storekeeper.page.goto('/');
+  const slot = storekeeper.page.getByRole('link', { name: /^VC-0301 / });
+  await expect(slot).toHaveAccessibleName(/in the crib/);
+  await tech.page.goto('/t/VC-0301');
+  await tech.page.getByRole('button', { name: 'Check out VC-0301' }).click();
+  await expect(storekeeper.page.getByText('Asha Verma checked out VC-0301')).toBeVisible();
+  await expect(slot).toHaveAccessibleName(/checked out to Asha Verma/);
+});
+
+test('forged station messages are rejected and shown in the activity log', async () => {
+  expect(await station.forge('11223344')).toBeNull(); // no reply to a forgery
+  const { page } = admin;
+  await page.goto('/stations');
+  await expect(page.getByText('Forged or altered message rejected')).toBeVisible();
+  await expect(page.getByText('Asha Verma took TW-0101')).toBeVisible();
+  await expect(page.getByText(/TW-0103 refused: calibration expired/)).toBeVisible();
+  await shot(page, 'stations');
+  await expectAccessible(page);
+  await station.close();
 });
 
 test('technicians cannot reach admin-only screens', async () => {

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { conflict, forbidden, notFound } from '../lib/errors.js';
+import { ApiError, conflict, forbidden, notFound } from '../lib/errors.js';
+import { normalizeUid } from '../lib/uid.js';
 import { validate } from '../lib/validate.js';
 import { currentUser, requireRole } from '../middleware/session.js';
 import { createInvite } from '../services/invites.js';
@@ -13,7 +14,7 @@ export function userRoutes({ sql, config }: Deps) {
 
   app.get('/users', requireRole('admin', 'auditor'), async (c) => {
     const users = await sql`
-      SELECT id, email, display_name, role, is_active, created_at
+      SELECT id, email, display_name, role, is_active, created_at, badge_uid
       FROM users ORDER BY created_at`;
     return c.json({ users });
   });
@@ -34,15 +35,29 @@ export function userRoutes({ sql, config }: Deps) {
     validate(
       'json',
       z
-        .object({ role: z.enum(ROLES).optional(), isActive: z.boolean().optional() })
-        .refine((v) => v.role !== undefined || v.isActive !== undefined, 'Nothing to update'),
+        .object({
+          role: z.enum(ROLES).optional(),
+          isActive: z.boolean().optional(),
+          /** RFID badge UID in any common spelling, or null to remove it. */
+          badgeUid: z.string().max(40).nullable().optional(),
+        })
+        .refine((v) => v.role !== undefined || v.isActive !== undefined || v.badgeUid !== undefined, 'Nothing to update'),
     ),
     async (c) => {
       const { id } = c.req.valid('param');
       const body = c.req.valid('json');
       const me = currentUser(c);
-      // Prevents an admin from accidentally locking themselves out.
-      if (id === me.id) throw forbidden('You cannot change your own role or status');
+      // Prevents an admin from accidentally locking themselves out. (Assigning your own badge is fine.)
+      if (id === me.id && (body.role !== undefined || body.isActive !== undefined)) {
+        throw forbidden('You cannot change your own role or status');
+      }
+      let badge: string | null | undefined = undefined;
+      if (body.badgeUid !== undefined) {
+        badge = body.badgeUid === null || body.badgeUid.trim() === '' ? null : normalizeUid(body.badgeUid);
+        if (badge === null && body.badgeUid !== null && body.badgeUid.trim() !== '') {
+          throw new ApiError(422, 'invalid_uid', 'Badge ID must be 4, 7 or 10 bytes of hex, like C0:FF:EE:99');
+        }
+      }
 
       const user = await sql.begin(async (tx) => {
         // Serialize admin changes so two concurrent requests can't remove the last admin.
@@ -65,11 +80,14 @@ export function userRoutes({ sql, config }: Deps) {
         const [updated] = await tx`
           UPDATE users SET
             role = COALESCE(${body.role ?? null}::user_role, role),
-            is_active = COALESCE(${body.isActive ?? null}::boolean, is_active)
+            is_active = COALESCE(${body.isActive ?? null}::boolean, is_active),
+            badge_uid = CASE WHEN ${badge !== undefined} THEN ${badge ?? null} ELSE badge_uid END
           WHERE id = ${id}
-          RETURNING id, email, display_name, role, is_active`;
+          RETURNING id, email, display_name, role, is_active, badge_uid`;
         // Deactivation or a role change takes effect immediately: kill existing sessions.
-        await tx`DELETE FROM sessions WHERE user_id = ${id}`;
+        if (body.role !== undefined || body.isActive !== undefined) {
+          await tx`DELETE FROM sessions WHERE user_id = ${id}`;
+        }
         return updated;
       });
       return c.json({ user });

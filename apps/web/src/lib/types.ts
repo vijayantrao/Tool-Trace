@@ -27,6 +27,7 @@ export interface Tool {
   holderName: string | null;
   dueBackAt: string | null;
   overdue: boolean;
+  rfidUid: string | null;
 }
 
 export interface ToolDetail extends Tool {
@@ -97,6 +98,7 @@ export interface UserRow {
   role: Role;
   isActive: boolean;
   createdAt: string;
+  badgeUid: string | null;
 }
 
 export interface Holder {
@@ -112,4 +114,49 @@ export interface Invite {
   expiresAt: string;
   createdAt?: string;
   inviteUrl?: string;
+}
+
+export interface Station {
+  id: string;
+  name: string;
+  locationId: string;
+  locationName: string;
+  isActive: boolean;
+  keyVersion: number;
+  lastSeenAt: string | null;
+  online: boolean;
+}
+
+export interface Provisioning {
+  stationId: string;
+  keyVersion: number;
+  stationKey: string;
+  eventsTopic: string;
+  repliesTopic: string;
+  firmwareConfig: string;
+}
+
+export interface StationEvent {
+  id: string;
+  stationId: string;
+  stationName: string;
+  receivedAt: string;
+  kind: 'hello' | 'tap';
+  uid: string | null;
+  outcome: 'accepted' | 'rejected';
+  code: string;
+  userId: string | null;
+  userName: string | null;
+  toolId: string | null;
+  assetTag: string | null;
+}
+
+export interface FloorEvent {
+  kind: 'checked_out' | 'returned' | 'tool_changed' | 'checkout_updated' | 'station_event';
+  toolId?: string;
+  assetTag?: string;
+  stationId?: string;
+  actorId?: string;
+  message?: string;
+  at: string;
 }

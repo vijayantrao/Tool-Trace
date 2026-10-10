@@ -3,10 +3,11 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, LayoutGrid, LogOut, Menu, QrCode, ScanLine, Users, Wrench, type LucideIcon } from 'lucide-react';
+import { ArrowLeftRight, LayoutGrid, LogOut, Menu, QrCode, RadioTower, ScanLine, Users, Wrench, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { initials, roleLabel } from '@/lib/format';
+import { LiveBadge } from '@/lib/live';
 import { can } from '@/lib/session';
 import type { Me } from '@/lib/types';
 
@@ -23,6 +24,7 @@ const nav: NavItem[] = [
   { href: '/scan', label: 'Scan', icon: ScanLine },
   { href: '/checkouts', label: 'Checkouts', icon: ArrowLeftRight },
   { href: '/labels', label: 'QR labels', icon: QrCode, show: (m) => can.manageTools(m.role) },
+  { href: '/stations', label: 'Stations', icon: RadioTower, show: (m) => can.seeStations(m.role) },
   { href: '/people', label: 'People', icon: Users, show: (m) => can.seePeople(m.role) },
 ];
 
@@ -74,6 +76,9 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
           })}
         </nav>
         <div className="border-t border-white/15 p-4">
+          <div className="mb-3">
+            <LiveBadge />
+          </div>
           <div className="mb-3 flex items-center gap-3">
             <span className="grid size-9 place-items-center rounded-full bg-black/25 text-sm font-semibold">
               {initials(me.displayName)}
@@ -97,6 +102,9 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         <Link href="/">
           <Wordmark small />
         </Link>
+        <span className="ml-auto mr-3">
+          <LiveBadge />
+        </span>
         <Link
           href="/more"
           className="grid size-10 place-items-center rounded-full bg-black/20 text-sm font-semibold"

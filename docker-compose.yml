@@ -28,11 +28,23 @@ services:
       RP_ID: localhost
       RP_ORIGINS: http://localhost:3000
       COOKIE_SECURE: "false"
+      # Smart stations. This master key is for local use only: generate your own for anything real.
+      STATION_MASTER_KEY: "6c6f63616c2d6f6e6c792d6d61737465722d6b65792d646f2d6e6f742d757365"
+      MQTT_URL: mqtt://mqtt:1883
     ports:
       - "8080:8080"
     depends_on:
       db:
         condition: service_healthy
+      mqtt:
+        condition: service_started
+
+  mqtt:
+    # Local broker for stations and the terminal simulator. Anonymous access: local only.
+    image: eclipse-mosquitto:2
+    command: mosquitto -c /mosquitto-no-auth.conf
+    ports:
+      - "1883:1883"
 
   web:
     build:

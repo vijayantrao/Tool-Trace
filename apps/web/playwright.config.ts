@@ -3,6 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export const WEB_PORT = 3100;
 export const API_PORT = 8090;
 export const WEB_URL = `http://localhost:${WEB_PORT}`;
+export const MQTT_PORT = 18833;
 const DB_URL = process.env.E2E_DATABASE_URL ?? 'postgres://postgres:postgres@localhost:5432/tooltrace_e2e';
 
 const apiEnv = {
@@ -14,6 +15,9 @@ const apiEnv = {
   RP_ORIGINS: WEB_URL,
   COOKIE_SECURE: 'false',
   AUTH_RATE_LIMIT_PER_MINUTE: '500',
+  // Smart stations: test-only master key and the API's built-in development broker.
+  STATION_MASTER_KEY: 'a1'.repeat(32),
+  DEV_MQTT_BROKER_PORT: String(MQTT_PORT),
 };
 
 export default defineConfig({

@@ -79,6 +79,29 @@ jobs:
           path: apps/web/test-results
           retention-days: 7
 
+  firmware:
+    name: Firmware - C++ tests and ESP32 build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: firmware/station
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get install -y --no-install-recommends libssl-dev
+      - name: Host tests (shared signing vectors)
+        run: make -C test/host
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/cache@v4
+        with:
+          path: ~/.platformio
+          key: pio-${{ runner.os }}-${{ hashFiles('firmware/station/platformio.ini') }}
+      - run: pip install platformio
+      - run: cp include/config.example.h include/config.h
+      - name: Build ESP32 firmware
+        run: pio run
+
   docker:
     name: Docker images build
     runs-on: ubuntu-latest

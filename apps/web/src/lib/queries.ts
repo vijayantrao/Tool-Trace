@@ -8,7 +8,10 @@ import type {
   Holder,
   Invite,
   Location,
+  Provisioning,
   ReturnCondition,
+  Station,
+  StationEvent,
   Role,
   Tool,
   ToolDetail,
@@ -24,6 +27,8 @@ export const keys = {
   holders: ['holders'] as const,
   users: ['users'] as const,
   invites: ['invites'] as const,
+  stations: ['stations'] as const,
+  stationEvents: ['station-events'] as const,
 };
 
 const qs = (q: Record<string, string>) => {
@@ -139,6 +144,50 @@ export function useUpdateToolStatus() {
   });
 }
 
+export function useSetToolTag() {
+  const invalidate = useInvalidateFloor();
+  return useMutation({
+    mutationFn: ({ id, rfidUid }: { id: string; rfidUid: string | null }) =>
+      api<{ tool: ToolDetail }>(`/tools/${id}`, { method: 'PATCH', body: { rfidUid } }),
+    onSuccess: invalidate,
+  });
+}
+
+export const useStations = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.stations,
+    queryFn: () => api<{ stations: Station[]; enabled: boolean }>('/stations'),
+    enabled,
+    refetchInterval: 30_000,
+  });
+
+export const useStationEvents = (enabled: boolean) =>
+  useQuery({
+    queryKey: keys.stationEvents,
+    queryFn: async () => (await api<{ events: StationEvent[] }>('/station-events?limit=50')).events,
+    enabled,
+  });
+
+function useStationMutation<T>(fn: (v: T) => Promise<{ provisioning?: Provisioning }>) {
+  const qc = useQueryClient();
+  return useMutation({ mutationFn: fn, onSuccess: () => qc.invalidateQueries({ queryKey: keys.stations }) });
+}
+
+export const useCreateStation = () =>
+  useStationMutation((body: { name: string; locationId: string }) =>
+    api<{ station: Station; provisioning: Provisioning }>('/stations', { body }),
+  );
+
+export const useRotateStationKey = () =>
+  useStationMutation((id: string) =>
+    api<{ station: Station; provisioning: Provisioning }>(`/stations/${id}/rotate-key`, { method: 'POST', body: {} }),
+  );
+
+export const useUpdateStation = () =>
+  useStationMutation(({ id, ...body }: { id: string; isActive?: boolean; name?: string }) =>
+    api<{ provisioning?: Provisioning }>(`/stations/${id}`, { method: 'PATCH', body }),
+  );
+
 export function useCreateInvite() {
   const qc = useQueryClient();
   return useMutation({
@@ -159,7 +208,7 @@ export function useRevokeInvite() {
 export function useUpdateUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: { id: string; role?: Role; isActive?: boolean }) =>
+    mutationFn: ({ id, ...body }: { id: string; role?: Role; isActive?: boolean; badgeUid?: string | null }) =>
       api<{ user: UserRow }>(`/users/${id}`, { method: 'PATCH', body }),
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.users }), qc.invalidateQueries({ queryKey: keys.holders })]),
   });

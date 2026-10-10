@@ -4,6 +4,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { Spinner } from '@/components/ui';
+import { LiveFloorProvider } from '@/lib/live';
 import { useMe } from '@/lib/session';
 
 export default function SignedInLayout({ children }: { children: ReactNode }) {
@@ -37,5 +38,9 @@ export default function SignedInLayout({ children }: { children: ReactNode }) {
       </div>
     );
   }
-  return <AppShell me={me}>{children}</AppShell>;
+  return (
+    <LiveFloorProvider meId={me.id}>
+      <AppShell me={me}>{children}</AppShell>
+    </LiveFloorProvider>
+  );
 }

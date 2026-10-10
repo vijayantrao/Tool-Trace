@@ -16,6 +16,10 @@ set "COOKIE_SECURE=false"
 set "PORT=8080"
 set "API_URL=http://localhost:8080"
 set "NEXT_TELEMETRY_DISABLED=1"
+rem Smart stations: a built-in MQTT broker on port 1883 and a master key made once for this computer.
+set "DEV_MQTT_BROKER_PORT=1883"
+if not exist "apps\api\.station-master-key" node -e "require('fs').writeFileSync('apps/api/.station-master-key', require('crypto').randomBytes(32).toString('hex'))"
+set /p STATION_MASTER_KEY=<"apps\api\.station-master-key"
 
 echo.
 echo  [1/5] Starting the database...
@@ -51,6 +55,8 @@ if defined INVITE (
   start "" "http://localhost:3000/login"
 )
 echo.
+echo  Smart stations: open Stations in the app, add one, then run the command it shows
+echo  in a new terminal to try a station without hardware.
 echo  To stop ToolTrace, close the two "keep open" windows.
 echo.
 pause

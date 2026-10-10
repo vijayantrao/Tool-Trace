@@ -3,6 +3,7 @@
 import QRCode from 'qrcode';
 import { Copy } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
+import { TagEditor } from '@/components/tag-editor';
 import { toast } from '@/components/toast';
 import { Button, ErrorNote, Field, Input, PageHeader, Panel, Select, Spinner } from '@/components/ui';
 import { errorText } from '@/lib/api';
@@ -39,7 +40,7 @@ export default function PeoplePage() {
       ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-panel">
           {users.data!.map((u) => (
-            <UserRow key={u.id} user={u} editable={admin && u.id !== me!.id} />
+            <UserRow key={u.id} user={u} editable={admin && u.id !== me!.id} canBadge={admin} />
           ))}
         </ul>
       )}
@@ -47,7 +48,7 @@ export default function PeoplePage() {
   );
 }
 
-function UserRow({ user, editable }: { user: import('@/lib/types').UserRow; editable: boolean }) {
+function UserRow({ user, editable, canBadge }: { user: import('@/lib/types').UserRow; editable: boolean; canBadge: boolean }) {
   const update = useUpdateUser();
   const change = async (body: { role?: Role; isActive?: boolean }, msg: string) => {
     try {
@@ -66,6 +67,15 @@ function UserRow({ user, editable }: { user: import('@/lib/types').UserRow; edit
           {!user.isActive && <span className="ml-2 text-sm font-normal text-signal">Deactivated</span>}
         </div>
         <div className="truncate text-sm text-muted">{user.email}</div>
+        <div className="mt-1.5">
+          <TagEditor
+            label="Badge"
+            value={user.badgeUid}
+            canEdit={canBadge}
+            onSave={(badgeUid) => update.mutateAsync({ id: user.id, badgeUid })}
+            savedMessage={(uid) => (uid ? `Badge assigned to ${user.displayName}` : `Badge removed from ${user.displayName}`)}
+          />
+        </div>
       </div>
       {editable ? (
         <div className="flex gap-2">

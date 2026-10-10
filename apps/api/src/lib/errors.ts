@@ -44,6 +44,7 @@ export function toApiError(err: unknown): ApiError {
       case '22P02':
         return badRequest('invalid_input', 'Malformed identifier or value');
       case 'P0001':
+        if (err.hint === 'uid_in_use') return conflict('uid_in_use', err.message ?? 'RFID tag already in use');
         if (err.hint === 'tool_unavailable' || err.hint === 'calibration_expired') {
           return conflict(err.hint, err.message ?? 'Rule violated');
         }

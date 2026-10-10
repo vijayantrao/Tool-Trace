@@ -1,0 +1,65 @@
+{
+  "description": "Shared test vectors. The API (TypeScript) and station firmware (C++) must both reproduce these exactly.",
+  "masterKeyHex": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "stationId": "7c1e4d2a-9b3f-4e8a-a5d6-0f2b8c9e1a37",
+  "keyVersion": 1,
+  "stationKeyHex": "74b89eeef7e28763849b047bbed55b6e79dc3044b68e26abc88c7f168099093e",
+  "messages": [
+    {
+      "v": 1,
+      "seq": 1760000000123,
+      "type": "hello",
+      "uid": "",
+      "flag": "ok",
+      "canonical": "v1|7c1e4d2a-9b3f-4e8a-a5d6-0f2b8c9e1a37|1760000000123|hello||ok",
+      "sig": "0eceea14f7d0e344dff2e912993c29483b30319f172b51c048b5b90a731f4f2c"
+    },
+    {
+      "v": 1,
+      "seq": 1760000000456,
+      "type": "tap",
+      "uid": "C0FFEE99",
+      "flag": "ok",
+      "canonical": "v1|7c1e4d2a-9b3f-4e8a-a5d6-0f2b8c9e1a37|1760000000456|tap|C0FFEE99|ok",
+      "sig": "e38ef45ec56205143f9b83cedad5529400ee1fbe773127d54302f9be011a2076"
+    },
+    {
+      "v": 1,
+      "seq": 1760000000789,
+      "type": "tap",
+      "uid": "11223344",
+      "flag": "problem",
+      "canonical": "v1|7c1e4d2a-9b3f-4e8a-a5d6-0f2b8c9e1a37|1760000000789|tap|11223344|problem",
+      "sig": "18cf0f049313ea510e7b1bf11e7c4cb4c64a0396a6814505f530d5b7d4d0f17e"
+    },
+    {
+      "v": 1,
+      "seq": 1760000001000,
+      "type": "tap",
+      "uid": "04112233445566",
+      "flag": "ok",
+      "canonical": "v1|7c1e4d2a-9b3f-4e8a-a5d6-0f2b8c9e1a37|1760000001000|tap|04112233445566|ok",
+      "sig": "07db888fdbd4eaf0b452d9226d035e2f0fe8506d62084c36762c58e799d33669"
+    }
+  ],
+  "replies": [
+    {
+      "seq": 1760000000456,
+      "ok": true,
+      "led": "green",
+      "l1": "TW-0101 is yours",
+      "l2": "Due in 8 h",
+      "canonical": "r1|7c1e4d2a-9b3f-4e8a-a5d6-0f2b8c9e1a37|1760000000456|1|green|TW-0101 is yours|Due in 8 h",
+      "sig": "2e1f1a751f1e6c3ac76055b39bc4f0f8d18f5e1c5a1a4c2c94dfc8c9792de34a"
+    },
+    {
+      "seq": 1760000000789,
+      "ok": false,
+      "led": "red",
+      "l1": "LOCKED",
+      "l2": "Calibration expired",
+      "canonical": "r1|7c1e4d2a-9b3f-4e8a-a5d6-0f2b8c9e1a37|1760000000789|0|red|LOCKED|Calibration expired",
+      "sig": "3a6871fae4565431ec3f0ff21e09b49940a3413992b02f843af947fb898f3f95"
+    }
+  ]
+}

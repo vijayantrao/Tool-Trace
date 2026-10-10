@@ -37,18 +37,33 @@ try {
   for (const l of locations) {
     await sql`INSERT INTO locations (name, kind) VALUES (${l.name}, ${l.kind}) ON CONFLICT (name) DO NOTHING`;
   }
-  const [crib] = await sql<{ id: string }[]>`SELECT id FROM locations WHERE name = 'Main Tool Crib'`;
+  const [mainCrib] = await sql<{ id: string }[]>`SELECT id FROM locations WHERE name = 'Main Tool Crib'`;
   for (const t of tools) {
     const cal = t.interval !== null;
     await sql`
       INSERT INTO tools (asset_tag, name, category, home_location_id, requires_calibration,
                          calibration_interval_days, last_calibrated_on, calibration_due_on)
-      VALUES (${t.tag}, ${t.name}, ${t.category}, ${crib!.id}, ${cal}, ${t.interval},
+      VALUES (${t.tag}, ${t.name}, ${t.category}, ${mainCrib!.id}, ${cal}, ${t.interval},
               ${cal ? sql`current_date - ${t.daysAgo}::int` : null},
               ${cal ? sql`current_date - ${t.daysAgo}::int + ${t.interval}::int` : null})
       ON CONFLICT (asset_tag) DO NOTHING`;
   }
-  console.log(`[seed] ${locations.length} locations and ${tools.length} tools ready`);
+  // RFID tags matching the Wokwi simulator's preset cards, so the demo station works out of the box.
+  // (The key fob, C0:FF:EE:99, is left free: assign it to yourself as a badge on the People page.)
+  const tags: [string, string][] = [
+    ['TW-0101', '11223344'], // green card
+    ['MM-0201', '55667788'], // yellow card
+    ['TW-0103', 'AABBCCDD'], // red card: calibration expired, shows LOCKED
+    ['VC-0301', '04112233445566'], // NFC tag
+  ];
+  for (const [tag, uid] of tags) {
+    await sql`
+      UPDATE tools SET rfid_uid = ${uid}
+      WHERE asset_tag = ${tag} AND rfid_uid IS NULL
+        AND NOT EXISTS (SELECT 1 FROM tools WHERE rfid_uid = ${uid})
+        AND NOT EXISTS (SELECT 1 FROM users WHERE badge_uid = ${uid})`;
+  }
+  console.log(`[seed] ${locations.length} locations and ${tools.length} tools ready (${tags.length} with RFID tags)`);
 } finally {
   await sql.end();
 }

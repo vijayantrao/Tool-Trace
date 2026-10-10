@@ -5,11 +5,12 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, Lock, QrCode } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { AssetTag, CalSticker, StatusTag, toolIcon } from '@/components/tool-visuals';
+import { TagEditor } from '@/components/tag-editor';
 import { toast } from '@/components/toast';
 import { Button, ErrorNote, Field, Input, Panel, Select, Spinner } from '@/components/ui';
 import { errorText } from '@/lib/api';
 import { formatDateTime, formatDay, relative, todayIso } from '@/lib/format';
-import { useCheckOut, useHolders, useRecordCalibration, useReturn, useTool, useUpdateToolStatus } from '@/lib/queries';
+import { useCheckOut, useHolders, useRecordCalibration, useReturn, useSetToolTag, useTool, useUpdateToolStatus } from '@/lib/queries';
 import { can, useMe } from '@/lib/session';
 import type { Me, ReturnCondition, ToolDetail } from '@/lib/types';
 
@@ -17,6 +18,7 @@ export default function ToolPage() {
   const { id } = useParams<{ id: string }>();
   const { data: me } = useMe();
   const { data: tool, isLoading, isError, error } = useTool(id);
+  const setTag = useSetToolTag();
 
   if (isLoading) return <Spinner />;
   if (isError || !tool) return <ErrorNote>{errorText(error)}</ErrorNote>;
@@ -53,6 +55,13 @@ export default function ToolPage() {
         {tool.status === 'available' && !locked && can.checkOut(me?.role) && <CheckOutPanel tool={tool} me={me!} />}
         {tool.status === 'quarantined' && <QuarantinePanel tool={tool} me={me!} />}
         {tool.requiresCalibration && <CalibrationPanel tool={tool} me={me!} />}
+        <TagEditor
+          label="RFID tag"
+          value={tool.rfidUid}
+          canEdit={can.manageTools(me?.role)}
+          onSave={(rfidUid) => setTag.mutateAsync({ id: tool.id, rfidUid })}
+          savedMessage={(uid) => (uid ? `RFID tag assigned to ${tool.assetTag}` : `RFID tag removed from ${tool.assetTag}`)}
+        />
         {can.manageTools(me?.role) && <ManagePanel tool={tool} />}
       </div>
     </div>

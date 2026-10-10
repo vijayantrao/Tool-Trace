@@ -9,10 +9,13 @@ import { loadConfig, type Config } from '../../src/config.js';
 import { createDb, type Sql } from '../../src/db.js';
 import { migrate } from '../../src/migrate.js';
 import { createInvite } from '../../src/services/invites.js';
+import { FloorEvents } from '../../src/stations/floor-events.js';
+import { StationGateway } from '../../src/stations/gateway.js';
 import type { Role } from '../../src/types.js';
 import { SoftAuthenticator } from './authenticator.js';
 
 export const ORIGIN = 'http://localhost:3000';
+export const TEST_MASTER_KEY = 'f'.repeat(64);
 export const RP_ID = 'localhost';
 
 const ADMIN_URL = process.env.TEST_DATABASE_ADMIN_URL ?? 'postgres://postgres:postgres@localhost:5432/postgres';
@@ -35,16 +38,23 @@ export async function createHarness(overrides: Partial<Record<string, string>> =
     RP_ORIGINS: ORIGIN,
     COOKIE_SECURE: 'false',
     AUTH_RATE_LIMIT_PER_MINUTE: '1000',
+    STATION_MASTER_KEY: TEST_MASTER_KEY,
     ...overrides,
   });
-  const app = createApp({ sql, config });
+  const events = await new FloorEvents(sql).start();
+  // Tests fire taps far faster than people; the real limits are tested separately.
+  const gateway = new StationGateway(sql, config, { burst: 1000, perSecond: 1000 });
+  const app = createApp({ sql, config, events, gateway, sseHeartbeatMs: 300 });
 
   return {
     sql,
     config,
     app,
+    events,
+    gateway,
     client: () => new TestClient(app),
     async close() {
+      await events.stop();
       await sql.end();
       await admin.unsafe(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`);
       await admin.end();

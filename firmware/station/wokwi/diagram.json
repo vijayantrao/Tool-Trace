@@ -1,0 +1,271 @@
+{
+  "version": 1,
+  "author": "Vijayant Rao",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "board-esp32-devkit-c-v4",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": {}
+    },
+    {
+      "type": "board-mfrc522",
+      "id": "rfid",
+      "top": -40,
+      "left": 260,
+      "rotate": 0,
+      "attrs": {
+        "uid": "0A:0B:0C:0D"
+      }
+    },
+    {
+      "type": "board-ssd1306",
+      "id": "oled",
+      "top": -150,
+      "left": 20,
+      "attrs": {
+        "i2cAddress": "0x3c"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_green",
+      "top": 230,
+      "left": 250,
+      "attrs": {
+        "color": "green",
+        "label": "OK"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_amber",
+      "top": 230,
+      "left": 300,
+      "attrs": {
+        "color": "orange",
+        "label": "Info"
+      }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_red",
+      "top": 230,
+      "left": 350,
+      "attrs": {
+        "color": "red",
+        "label": "No"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 300,
+      "left": 245,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 300,
+      "left": 295,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r3",
+      "top": 300,
+      "left": 345,
+      "rotate": 90,
+      "attrs": {
+        "value": "220"
+      }
+    },
+    {
+      "type": "wokwi-buzzer",
+      "id": "buzzer",
+      "top": 230,
+      "left": 420,
+      "attrs": {
+        "volume": "0.2"
+      }
+    },
+    {
+      "type": "wokwi-pushbutton",
+      "id": "btn_problem",
+      "top": 330,
+      "left": 420,
+      "attrs": {
+        "color": "red",
+        "label": "Report a problem"
+      }
+    }
+  ],
+  "connections": [
+    [
+      "esp:TX",
+      "$serialMonitor:RX",
+      "",
+      []
+    ],
+    [
+      "esp:RX",
+      "$serialMonitor:TX",
+      "",
+      []
+    ],
+    [
+      "rfid:SDA",
+      "esp:5",
+      "orange",
+      []
+    ],
+    [
+      "rfid:SCK",
+      "esp:18",
+      "yellow",
+      []
+    ],
+    [
+      "rfid:MOSI",
+      "esp:23",
+      "blue",
+      []
+    ],
+    [
+      "rfid:MISO",
+      "esp:19",
+      "purple",
+      []
+    ],
+    [
+      "rfid:RST",
+      "esp:4",
+      "white",
+      []
+    ],
+    [
+      "rfid:3.3V",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "rfid:GND",
+      "esp:GND.1",
+      "black",
+      []
+    ],
+    [
+      "oled:SDA",
+      "esp:21",
+      "blue",
+      []
+    ],
+    [
+      "oled:SCL",
+      "esp:22",
+      "yellow",
+      []
+    ],
+    [
+      "oled:VCC",
+      "esp:3V3",
+      "red",
+      []
+    ],
+    [
+      "oled:GND",
+      "esp:GND.2",
+      "black",
+      []
+    ],
+    [
+      "esp:25",
+      "led_green:A",
+      "green",
+      []
+    ],
+    [
+      "led_green:C",
+      "r1:1",
+      "black",
+      []
+    ],
+    [
+      "r1:2",
+      "esp:GND.3",
+      "black",
+      []
+    ],
+    [
+      "esp:27",
+      "led_amber:A",
+      "orange",
+      []
+    ],
+    [
+      "led_amber:C",
+      "r2:1",
+      "black",
+      []
+    ],
+    [
+      "r2:2",
+      "esp:GND.3",
+      "black",
+      []
+    ],
+    [
+      "esp:26",
+      "led_red:A",
+      "red",
+      []
+    ],
+    [
+      "led_red:C",
+      "r3:1",
+      "black",
+      []
+    ],
+    [
+      "r3:2",
+      "esp:GND.3",
+      "black",
+      []
+    ],
+    [
+      "esp:32",
+      "buzzer:2",
+      "purple",
+      []
+    ],
+    [
+      "buzzer:1",
+      "esp:GND.3",
+      "black",
+      []
+    ],
+    [
+      "esp:33",
+      "btn_problem:1.l",
+      "red",
+      []
+    ],
+    [
+      "btn_problem:2.l",
+      "esp:GND.3",
+      "black",
+      []
+    ]
+  ],
+  "dependencies": {}
+}
