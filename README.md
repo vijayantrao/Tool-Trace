@@ -3,14 +3,16 @@
 **A smart tool-tracking and calibration platform for factory floors.**
 
 [![CI](https://github.com/vijayantrao/Tool-Trace/actions/workflows/ci.yml/badge.svg)](https://github.com/vijayantrao/Tool-Trace/actions/workflows/ci.yml)
+[![Security](https://github.com/vijayantrao/Tool-Trace/actions/workflows/security.yml/badge.svg)](https://github.com/vijayantrao/Tool-Trace/actions/workflows/security.yml)
 
 On a real shop floor, tools go missing, get used past their calibration date, and nobody can say who had a torque wrench last Tuesday. Spreadsheets and paper logs can't enforce rules. ToolTrace makes those rules impossible to break:
 
 - An **out-of-calibration tool cannot be checked out.** The API refuses, and so does the database itself.
 - **A tool can never be issued to two people at once**, even if two requests arrive at the same millisecond.
 - **Every account signs in with a passkey** (fingerprint, face or device PIN). There are no passwords to steal or phish.
+- **Nobody can quietly rewrite history.** Every change lands in a hash-chained audit trail that even the database owner can't edit without it showing.
 
-> Status: **Phase 3 of 6 complete** (secure backend, web app, IoT stations). See the [roadmap](#roadmap).
+> Status: **Phase 4 of 6 complete** (secure backend, web app, IoT stations, hardening). See the [roadmap](#roadmap).
 
 ## The tool board
 
@@ -51,6 +53,17 @@ sequenceDiagram
 
 ![Stations](docs/screenshots/stations.png)
 
+## Tamper-evident audit trail
+
+Calibration auditors (ISO 9001, AS9100, IATF 16949) ask one question above all: *can you prove these records weren't changed?* ToolTrace can.
+
+- **Written by the database, not the app.** Triggers record every check-out, return, calibration, role change, badge assignment, invite, sign-in, failed sign-in and rejected station message, in the same transaction as the change. There is no code path that changes data without logging it.
+- **Append-only.** `UPDATE`, `DELETE` and `TRUNCATE` on the log are blocked for everyone, including the table owner. The app's database role can't even insert directly.
+- **Hash-chained.** Each entry stores `SHA-256(previous hash ‖ entry)`. The **Verify integrity** button recomputes the chain and points to the first edited, deleted or relinked entry.
+- **Anchored.** Verification shows the head as `id:hash`. Keep it anywhere outside ToolTrace; pasting it later proves that even a complete, consistent rewrite of the log by someone with full database access would be caught.
+
+![Audit trail](docs/screenshots/audit.png)
+
 Every change is **live**: the board, tool pages and checkouts update on every open screen within a moment, whether the change came from a phone, a station, or another browser. Database triggers send `NOTIFY` only when a transaction commits, so screens never show a change that was rolled back, and any number of API instances stay in sync.
 
 ---
@@ -67,18 +80,20 @@ flowchart LR
     subgraph Cloud["Free-tier cloud"]
         Web["Next.js web app<br/>(Vercel)"]
         API["TypeScript API<br/>Hono · passkeys · RBAC<br/>(Render)"]
-        DB[("PostgreSQL<br/>(Neon)")]
+        DB[("PostgreSQL<br/>row-level security<br/>hash-chained audit<br/>(Neon)")]
+        Redis[("Redis<br/>rate limits<br/>(Upstash)")]
         MQTT["MQTT broker<br/>(HiveMQ)"]
         ML["Python ML job<br/>(GitHub Actions, nightly)"]
     end
 
     Phone --> Web -->|"/api proxy, same-origin cookies"| API --> DB
+    API --> Redis
     Station -->|"MQTT over TLS, signed events"| MQTT --> API
     ML -->|"risk scores"| DB
 
     classDef done fill:#d1fae5,stroke:#059669,color:#064e3b
     classDef next fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray: 4 3
-    class API,DB,Web,Phone,Station,MQTT done
+    class API,DB,Web,Phone,Station,MQTT,Redis done
     class ML next
 ```
 
@@ -100,7 +115,10 @@ Green parts are built. Dashed parts are on the roadmap.
 | Station firmware | **C++** on ESP32 (Arduino, PlatformIO): MFRC522 RFID, SSD1306 OLED, mbedTLS HMAC, TLS MQTT | Real hardware, simulated free in Wokwi; logic unit-tested on the host |
 | Messaging | **MQTT** (QoS 1, persistent sessions), MQTT.js, Mosquitto / HiveMQ Cloud | The standard IoT protocol; taps sent while the API sleeps are delivered when it wakes |
 | Live updates | PostgreSQL `LISTEN/NOTIFY` → Server-Sent Events | Works across many API instances with no extra infrastructure |
-| Planned | Python (scikit-learn), Redis | See the roadmap |
+| Data security | PostgreSQL **row-level security**, least-privilege role, `SECURITY DEFINER` triggers, SHA-256 hash chain | The database enforces who sees what, even if application code has a bug |
+| Rate limiting | **Redis** (atomic Lua script), in-memory fallback | Limits hold across every API instance and survive restarts |
+| Security scanning | **CodeQL** (TypeScript + C++), **gitleaks**, **OWASP ZAP**, **Grype**, `npm audit`, Dependabot | Every push and weekly; scanners pinned by version and SHA-256 checksum |
+| Planned | Python (scikit-learn) | See the roadmap |
 
 ## Security design
 
@@ -115,7 +133,11 @@ Green parts are built. Dashed parts are on the roadmap.
 | Privilege misuse | Four roles (Admin, Storekeeper, Technician, Auditor) checked on every route. Technicians only ever see their own data |
 | Admin lockout or takeover races | Admins can't change their own role. Admin changes are serialized and re-check the requester's rights inside the transaction |
 | Deactivated employee keeps access | Deactivating a user or changing their role **revokes all of their sessions instantly** |
-| Brute force | Rate limiting on all `/api/auth` endpoints |
+| Brute force, API flooding | Per-IP limits on `/api/auth`, per-user limits on the whole API, counted in **Redis** so they hold across instances |
+| A route bug leaks or changes the wrong rows | Every request runs in one transaction as the least-privileged `tooltrace_app` role with the caller's identity attached. **PostgreSQL row-level security** decides which rows each role and person can see and change |
+| Half-finished changes after an error | Any failed request rolls its whole transaction back. Read requests run `READ ONLY`, so a GET can never write |
+| "I never did that" / quiet edits to records | Database-written, append-only, **hash-chained audit trail** with anchors (see above). Failed sign-ins and forged station messages are logged too |
+| Leaked secrets, vulnerable code or images | gitleaks over the full git history, CodeQL, OWASP ZAP against the running stack, Grype CVE scan of both images |
 | SQL injection | Every query uses bound parameters (postgres.js tagged templates). No string-built SQL |
 | Bugs that bypass the API | Calibration lockout and the one-checkout-per-tool rule are enforced **inside PostgreSQL** (trigger and partial unique index) |
 | Information leaks | Strict security headers (CSP `default-src 'none'`, HSTS, nosniff, no-referrer), `Cache-Control: no-store`, 64 KB body limit, generic error messages |
@@ -131,7 +153,7 @@ Green parts are built. Dashed parts are on the roadmap.
 | A flooding device | Per-station token-bucket rate limit |
 | Live streams after sign-out | The event stream re-checks the session on every heartbeat and closes when it ends |
 
-A full STRIDE threat model is planned for Phase 4.
+The full **[STRIDE threat model](docs/THREAT_MODEL.md)** maps every threat to the code and the test that defends against it, and lists the risks that remain. To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ## API
 
@@ -163,6 +185,8 @@ All routes live under `/api` and return JSON. Errors always look like `{ "error"
 | POST | `/stations/:id/rotate-key` | Admin | Issue a new station key; the old one stops working at once |
 | PATCH | `/stations/:id` | Admin | Rename, switch on or off |
 | GET | `/station-events` | Admin, Storekeeper, Auditor | Activity log, including rejected (forged, replayed) messages |
+| GET | `/audit?action=&entityId=&before=` | Admin, Auditor | The audit trail, newest first, paged by id |
+| GET | `/audit/verify?anchorId=&anchorHash=` | Admin, Auditor | Recompute the hash chain; optionally check a saved anchor |
 
 ## Run it locally
 
@@ -196,10 +220,11 @@ The bootstrap script prints a one-time admin invite link. It refuses to run once
 ## Tests
 
 ```bash
-# API: 87 tests. Needs a Postgres server; each test file creates and drops its own database.
+# API: 114 tests. Needs a Postgres server; each test file creates and drops its own database.
+# Add REDIS_TEST_URL=redis://localhost:6379 to also test shared rate limits on a real Redis.
 TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm test
 
-# Browser: 20 end-to-end tests with real passkeys (first time: npx playwright install chromium)
+# Browser: 21 end-to-end tests with real passkeys (first time: npx playwright install chromium)
 npm run build -w apps/web
 E2E_DATABASE_URL=postgres://postgres:postgres@localhost:5432/tooltrace_e2e npm run test:e2e
 
@@ -209,29 +234,32 @@ make -C firmware/station/test/host
 
 The **station suite** (inside the API tests) checks the signing format against [shared test vectors](firmware/station/test/vectors.json) that the C++ firmware tests also use, then plays a station through every path: badge first, check-out, return, problem return, locked calibration, unknown tags, expired badges, forged and altered signatures, replays, wrong clocks, flooding, key rotation, switched-off stations, a full round trip over a real MQTT broker, and live updates reaching a browser stream.
 
+The **security suite** attacks the database directly as the app role: a technician issuing tools to someone else, forging who issued a tool, editing tools, reading others' history, calling the audit writer; a station touching another station's row. It then plays an attacker with full database access who edits, deletes, and finally rewrites the entire audit chain, and checks that verification catches each one (the last only with an anchor). It also proves GET requests can't write, failed requests leave nothing behind, limits are shared through a real Redis, and the limiter fails open.
+
 The **API suite** covers the full passkey flow, phishing and replay rejection, role checks, CSRF blocking, cookie hardening, rate limiting, the calibration lockout (including a direct database insert that bypasses the API), concurrent checkouts, and concurrent admin demotions.
 
-The **browser suite** plays out a whole shift in Chromium with a virtual passkey authenticator: an admin bootstraps the system and invites a storekeeper and a technician, the technician checks out a tool on a phone-sized screen, an expired tool is shown as locked, the storekeeper receives a tool back damaged, quarantines it, recalibrates it, adds a new tool and prints its QR label, an admin sets up a station and assigns a badge, a simulated station's taps update another person's board live with no reload, a forged message shows up in the activity log, and a deactivated user is signed out everywhere. Every main screen is also scanned with **axe** for WCAG 2.1 AA accessibility problems.
+The **browser suite** plays out a whole shift in Chromium with a virtual passkey authenticator: an admin bootstraps the system and invites a storekeeper and a technician, the technician checks out a tool on a phone-sized screen, an expired tool is shown as locked, the storekeeper receives a tool back damaged, quarantines it, recalibrates it, adds a new tool and prints its QR label, an admin sets up a station and assigns a badge, a simulated station's taps update another person's board live with no reload, a forged message shows up in the activity log, an admin verifies the audit trail and checks a saved anchor, and a deactivated user is signed out everywhere. Every main screen is also scanned with **axe** for WCAG 2.1 AA accessibility problems.
 
 ## Project structure
 
 ```
 apps/api/
-  src/routes/           auth, users + invites, tools + locations, checkouts, dashboard, stations, live events
+  src/routes/           auth, users + invites, tools + locations, checkouts, dashboard, stations, audit, live events
   src/stations/         MQTT gateway, HKDF + HMAC signing, Postgres NOTIFY event hub
   src/services/         check-out and return rules shared by the web and stations
-  src/middleware/       sessions + roles, CSRF origin guard
+  src/middleware/       sessions + roles, CSRF origin guard, request transactions as the least-privileged role
   test/                 integration tests and a software passkey authenticator
 apps/web/
-  src/app/(app)/        board, tools, tool detail, scan, checkouts, QR labels, people
+  src/app/(app)/        board, tools, tool detail, scan, checkouts, QR labels, people, stations, audit trail
   src/app/(auth)/       passkey sign-in and invite acceptance
   src/app/api/          same-origin proxy to the API
   src/components/       shadow-board slot, calibration sticker, hang tag, QR scanner
   e2e/                  Playwright journeys with virtual passkeys and axe checks
 firmware/station/       ESP32 C++ firmware, host tests, shared vectors, Wokwi project
-db/migrations/          plain SQL, applied in order under an advisory lock
+db/migrations/          plain SQL, applied in order under an advisory lock (003: RLS, audit chain)
+docs/THREAT_MODEL.md    STRIDE threat model
 scripts/windows/        one-click launch and test scripts
-.github/                CI workflow and Dependabot
+.github/                CI and security workflows, Dependabot
 ```
 
 ## Roadmap
@@ -239,7 +267,7 @@ scripts/windows/        one-click launch and test scripts
 - [x] **Phase 1: Secure backend.** Schema, passkey auth, invites, roles, tools, calibration, checkouts, Docker, CI
 - [x] **Phase 2: Web app.** Shadow-board dashboard, QR scan-to-checkout, printable QR labels, invites, installable PWA, browser tests with real passkeys
 - [x] **Phase 3: IoT.** ESP32 + RFID smart station (C++), signed MQTT over TLS, live floor updates, badges and tool tags, Wokwi simulation
-- [ ] **Phase 4: Hardening.** Hash-chained tamper-evident audit log, Redis rate limiting, Postgres row-level security, CodeQL, gitleaks, OWASP ZAP, STRIDE threat model
+- [x] **Phase 4: Hardening.** Hash-chained tamper-evident audit log, Redis rate limiting, Postgres row-level security, CodeQL, gitleaks, OWASP ZAP, STRIDE threat model
 - [ ] **Phase 5: Intelligence.** Python ML for late-return and loss risk, anomaly detection, offline sync
 - [ ] **Phase 6: Launch.** Free-tier deployment, demo accounts, demo video
 

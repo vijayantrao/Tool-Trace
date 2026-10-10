@@ -1,9 +1,10 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import type { TxSql } from '../db.js';
+import type { Sql, TxSql } from '../db.js';
 import { conflict, notFound } from '../lib/errors.js';
 import { normalizeUid } from '../lib/uid.js';
 import { validate } from '../lib/validate.js';
+import { db } from '../middleware/db.js';
 import { currentUser, requireAuth, requireRole } from '../middleware/session.js';
 import type { AppEnv, Deps } from '../types.js';
 
@@ -23,7 +24,7 @@ const rfidUid = z
 const assetTag = z.string().trim().regex(/^[A-Z0-9][A-Z0-9-]{2,31}$/, 'Use 3-32 uppercase letters, digits or dashes');
 
 /** Shared SELECT list. calibration_state is computed, never stored, so it can't go stale. */
-const toolColumns = (sql: Deps['sql']) => sql`
+const toolColumns = (sql: Sql | TxSql) => sql`
   t.id, t.asset_tag, t.name, t.category, t.status, t.rfid_uid,
   t.home_location_id, l.name AS home_location_name,
   t.requires_calibration, t.calibration_interval_days,
@@ -40,18 +41,18 @@ const toolColumns = (sql: Deps['sql']) => sql`
   t.created_at, t.updated_at`;
 
 /** Tools joined with their location and current open checkout (if any). */
-const toolFrom = (sql: Deps['sql']) => sql`
+const toolFrom = (sql: Sql | TxSql) => sql`
   tools t
   JOIN locations l ON l.id = t.home_location_id
   LEFT JOIN checkouts co ON co.tool_id = t.id AND co.returned_at IS NULL
   LEFT JOIN users h ON h.id = co.holder_id`;
 
-export function toolRoutes({ sql }: Deps) {
+export function toolRoutes(_deps: Deps) {
   const app = new Hono<AppEnv>();
 
   // --- Locations -------------------------------------------------------------
   app.get('/locations', requireAuth, async (c) => {
-    const locations = await sql`SELECT id, name, kind FROM locations ORDER BY name`;
+    const locations = await db(c)`SELECT id, name, kind FROM locations ORDER BY name`;
     return c.json({ locations });
   });
 
@@ -61,7 +62,7 @@ export function toolRoutes({ sql }: Deps) {
     validate('json', z.object({ name: z.string().trim().min(1).max(80), kind: z.enum(['crib', 'bay', 'line', 'external']) })),
     async (c) => {
       const body = c.req.valid('json');
-      const [location] = await sql`INSERT INTO locations (name, kind) VALUES (${body.name}, ${body.kind}) RETURNING id, name, kind`;
+      const [location] = await db(c)`INSERT INTO locations (name, kind) VALUES (${body.name}, ${body.kind}) RETURNING id, name, kind`;
       return c.json({ location }, 201);
     },
   );
@@ -81,6 +82,7 @@ export function toolRoutes({ sql }: Deps) {
     async (c) => {
       const f = c.req.valid('query');
       const like = f.q ? `%${f.q.replace(/[\\%_]/g, (m) => `\\${m}`)}%` : null;
+      const sql = db(c);
       const tools = await sql`
         SELECT * FROM (
           SELECT ${toolColumns(sql)}
@@ -95,7 +97,7 @@ export function toolRoutes({ sql }: Deps) {
     },
   );
 
-  const getTool = async (where: { id?: string; assetTag?: string }) => {
+  const getTool = async (sql: TxSql, where: { id?: string; assetTag?: string }) => {
     const [tool] = await sql`
       SELECT ${toolColumns(sql)}
       FROM ${toolFrom(sql)}
@@ -114,11 +116,11 @@ export function toolRoutes({ sql }: Deps) {
   };
 
   app.get('/tools/by-tag/:assetTag', requireAuth, validate('param', z.object({ assetTag })), async (c) =>
-    c.json({ tool: await getTool({ assetTag: c.req.valid('param').assetTag }) }),
+    c.json({ tool: await getTool(db(c), { assetTag: c.req.valid('param').assetTag }) }),
   );
 
   app.get('/tools/:id', requireAuth, validate('param', idParam), async (c) =>
-    c.json({ tool: await getTool({ id: c.req.valid('param').id }) }),
+    c.json({ tool: await getTool(db(c), { id: c.req.valid('param').id }) }),
   );
 
   app.post(
@@ -145,7 +147,7 @@ export function toolRoutes({ sql }: Deps) {
     async (c) => {
       const b = c.req.valid('json');
       const cal = b.requiresCalibration;
-      const [created] = await sql<{ id: string }[]>`
+      const [created] = await db(c)<{ id: string }[]>`
         INSERT INTO tools (asset_tag, name, category, home_location_id, rfid_uid, requires_calibration,
                            calibration_interval_days, last_calibrated_on, calibration_due_on)
         VALUES (${b.assetTag}, ${b.name}, ${b.category}, ${b.homeLocationId}, ${b.rfidUid ?? null}, ${cal},
@@ -153,7 +155,7 @@ export function toolRoutes({ sql }: Deps) {
                 ${cal ? b.lastCalibratedOn! : null}::date,
                 ${cal ? b.lastCalibratedOn! : null}::date + ${cal ? b.calibrationIntervalDays! : 0}::int)
         RETURNING id`;
-      return c.json({ tool: await getTool({ id: created!.id }) }, 201);
+      return c.json({ tool: await getTool(db(c), { id: created!.id }) }, 201);
     },
   );
 
@@ -177,7 +179,8 @@ export function toolRoutes({ sql }: Deps) {
     async (c) => {
       const { id } = c.req.valid('param');
       const b = c.req.valid('json');
-      await sql.begin(async (tx) => {
+      const tx = db(c);
+      {
         const [tool] = await tx<{ status: string }[]>`SELECT status FROM tools WHERE id = ${id} FOR UPDATE`;
         if (!tool) throw notFound('Tool');
         if (b.status && tool.status === 'checked_out') {
@@ -191,8 +194,8 @@ export function toolRoutes({ sql }: Deps) {
             status = COALESCE(${b.status ?? null}::tool_status, status),
             rfid_uid = CASE WHEN ${b.rfidUid !== undefined} THEN ${b.rfidUid ?? null} ELSE rfid_uid END
           WHERE id = ${id}`;
-      });
-      return c.json({ tool: await getTool({ id }) });
+      }
+      return c.json({ tool: await getTool(tx, { id }) });
     },
   );
 
@@ -212,7 +215,8 @@ export function toolRoutes({ sql }: Deps) {
       const { id } = c.req.valid('param');
       const b = c.req.valid('json');
       const user = currentUser(c);
-      await sql.begin(async (tx: TxSql) => {
+      const tx = db(c);
+      {
         const [tool] = await tx<{ status: string; requiresCalibration: boolean; future: boolean }[]>`
           SELECT status, requires_calibration, ${b.calibratedOn}::date > current_date AS future
           FROM tools WHERE id = ${id} FOR UPDATE`;
@@ -234,8 +238,8 @@ export function toolRoutes({ sql }: Deps) {
             calibration_due_on = GREATEST(calibration_due_on, ${rec!.dueOn}::date),
             status = CASE WHEN status = 'quarantined' THEN 'available'::tool_status ELSE status END
           WHERE id = ${id}`;
-      });
-      return c.json({ tool: await getTool({ id }) }, 201);
+      }
+      return c.json({ tool: await getTool(tx, { id }) }, 201);
     },
   );
 

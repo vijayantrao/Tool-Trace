@@ -32,13 +32,14 @@ export async function checkOutTool(
   if (!holder || !holder.isActive) throw notFound('Holder');
   if (holder.role === 'auditor') throw conflict('invalid_holder', 'Auditors cannot hold tools');
 
-  // Lock the tool row so concurrent checkouts are serialized.
+  // Friendly early checks. The authoritative ones run inside the database
+  // (a trigger that locks the tool row, plus a unique index), so two people
+  // racing for the same tool can never both get it.
   const [tool] = await tx<{ id: string; assetTag: string; status: string; calibrationExpired: boolean }[]>`
     SELECT id, asset_tag, status,
            (requires_calibration AND calibration_due_on < current_date) AS calibration_expired
     FROM tools
-    WHERE ${'id' in input.tool ? tx`id = ${input.tool.id}` : tx`asset_tag = ${input.tool.assetTag.toUpperCase()}`}
-    FOR UPDATE`;
+    WHERE ${'id' in input.tool ? tx`id = ${input.tool.id}` : tx`asset_tag = ${input.tool.assetTag.toUpperCase()}`}`;
   if (!tool) throw notFound('Tool');
   if (tool.status !== 'available') {
     throw conflict('tool_unavailable', `Tool ${tool.assetTag} is not available (${tool.status})`);
@@ -51,7 +52,7 @@ export async function checkOutTool(
     INSERT INTO checkouts (tool_id, holder_id, issued_by, due_back_at, issued_via_station_id)
     VALUES (${tool.id}, ${input.holderId}, ${input.issuedBy}, ${input.dueBackAt}, ${input.stationId ?? null})
     RETURNING id, tool_id, holder_id, issued_by, checked_out_at, due_back_at`;
-  await tx`UPDATE tools SET status = 'checked_out' WHERE id = ${tool.id}`;
+  // The tool's status is set to checked_out by a database trigger.
   return { ...row!, assetTag: tool.assetTag };
 }
 
@@ -77,9 +78,7 @@ export async function returnCheckout(
     if (exists) throw conflict('already_returned', 'This checkout was already returned');
     throw notFound('Checkout');
   }
-  // Anything not returned in good condition is quarantined until inspected.
-  await tx`
-    UPDATE tools SET status = ${input.condition === 'ok' ? 'available' : 'quarantined'}::tool_status
-    WHERE id = ${row.toolId}`;
+  // A database trigger puts the tool back in service, or quarantines it if
+  // it wasn't returned in good condition.
   return row;
 }

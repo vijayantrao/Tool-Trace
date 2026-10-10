@@ -14,6 +14,7 @@ import { z } from 'zod';
 import type { Config } from '../config.js';
 import type { Sql } from '../db.js';
 import { hashToken } from '../lib/crypto.js';
+import { AUDIT_LOCK_ID, auditEvent, clientIp } from '../middleware/db.js';
 import { ApiError, badRequest, conflict } from '../lib/errors.js';
 import { rateLimit } from '../lib/rate-limit.js';
 import { validate } from '../lib/validate.js';
@@ -30,7 +31,7 @@ import type { AppEnv, Deps, Role } from '../types.js';
 const CHALLENGE_TTL_SECONDS = 300;
 const WEBAUTHN_TIMEOUT_MS = 120_000;
 
-const authFailed = () => new ApiError(401, 'authentication_failed', 'Passkey sign-in failed');
+const authFailedError = () => new ApiError(401, 'authentication_failed', 'Passkey sign-in failed');
 
 const b64url = z.string().min(1).max(4096).regex(/^[A-Za-z0-9_-]+$/);
 
@@ -96,14 +97,20 @@ async function consumeChallenge(c: Context, sql: Sql, config: Config, purpose: '
   return row;
 }
 
-export function authRoutes({ sql, config }: Deps) {
+export function authRoutes({ sql, config, limiter }: Deps) {
   const app = new Hono<AppEnv>();
   const expectedOrigin = config.RP_ORIGINS;
   const expectedRPID = config.RP_ID;
 
   app.use(
     '*',
-    rateLimit({ limit: config.AUTH_RATE_LIMIT_PER_MINUTE, windowMs: 60_000, trustProxy: config.TRUST_PROXY }),
+    rateLimit({
+      name: 'auth',
+      limit: config.AUTH_RATE_LIMIT_PER_MINUTE,
+      windowMs: 60_000,
+      store: limiter,
+      trustProxy: config.TRUST_PROXY,
+    }),
   );
 
   // --- Registration (only via invite) --------------------------------------
@@ -157,6 +164,9 @@ export function authRoutes({ sql, config }: Deps) {
       const info = verification.registrationInfo;
 
       const user = await sql.begin(async (tx) => {
+        // Same lock order as every other writer (see middleware/db.ts), so no deadlocks with the audit trail.
+        await tx`SELECT pg_advisory_xact_lock(${AUDIT_LOCK_ID})`;
+        await tx`SELECT set_config('tooltrace.ip', ${clientIp(c, config.TRUST_PROXY)}, true)`;
         // Atomic claim: only one request can ever use an invite.
         const [invite] = await tx<{ email: string; role: Role }[]>`
           UPDATE invites SET used_at = now()
@@ -199,6 +209,17 @@ export function authRoutes({ sql, config }: Deps) {
 
   app.post('/login/verify', validate('json', z.object({ response: authenticationResponse })), async (c) => {
     const { response } = c.req.valid('json');
+    // Every failed sign-in is recorded in the audit trail, with the reason (never shown to the client).
+    const authFailed = (reason: string, userId?: string) => {
+      void auditEvent(sql, {
+        action: 'auth.sign_in_failed',
+        entityType: 'user',
+        entityId: userId ?? null,
+        details: { reason, credentialId: response.id.slice(0, 64) },
+        ip: clientIp(c, config.TRUST_PROXY),
+      }).catch((err) => console.error('[audit] could not record failed sign-in', err));
+      return authFailedError();
+    };
     const challenge = await consumeChallenge(c, sql, config, 'login');
 
     const [cred] = await sql<
@@ -216,12 +237,13 @@ export function authRoutes({ sql, config }: Deps) {
       FROM passkeys p JOIN users u ON u.id = p.user_id
       WHERE p.id = ${response.id}`;
     // Same error for every failure, so attackers can't probe which credentials exist.
-    if (!cred || !cred.isActive) throw authFailed();
+    if (!cred) throw authFailed('unknown_credential');
+    if (!cred.isActive) throw authFailed('account_deactivated', cred.userId);
     if (
       response.response.userHandle &&
       response.response.userHandle !== isoBase64URL.fromBuffer(new Uint8Array(cred.webauthnUserId))
     ) {
-      throw authFailed();
+      throw authFailed('user_handle_mismatch', cred.userId);
     }
 
     let verification;
@@ -240,11 +262,13 @@ export function authRoutes({ sql, config }: Deps) {
         },
       });
     } catch {
-      throw authFailed();
+      throw authFailed('signature_invalid', cred.userId);
     }
-    if (!verification.verified) throw authFailed();
+    if (!verification.verified) throw authFailed('signature_invalid', cred.userId);
 
     await sql.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(${AUDIT_LOCK_ID})`;
+      await tx`SELECT set_config('tooltrace.ip', ${clientIp(c, config.TRUST_PROXY)}, true)`;
       await tx`
         UPDATE passkeys SET counter = ${verification.authenticationInfo.newCounter}, last_used_at = now()
         WHERE id = ${cred.id}`;

@@ -3,6 +3,7 @@ import type { MqttClient } from 'mqtt';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db.js';
+import { createLimiterStore } from './lib/rate-limit.js';
 import { FloorEvents } from './stations/floor-events.js';
 import { StationGateway } from './stations/gateway.js';
 import { connectGateway, startDevBroker } from './stations/mqtt.js';
@@ -11,7 +12,8 @@ const config = loadConfig();
 const sql = createDb(config.DATABASE_URL);
 const events = await new FloorEvents(sql).start();
 const gateway = new StationGateway(sql, config);
-const app = createApp({ sql, config, gateway, events });
+const limiter = await createLimiterStore(config.REDIS_URL);
+const app = createApp({ sql, config, gateway, events, limiter });
 
 // Smart stations: optional. Needs a master key, plus a broker (real, or the built-in dev one).
 let stopBroker: (() => Promise<void>) | undefined;
@@ -51,6 +53,7 @@ const shutdown = async () => {
   await mqttClient?.endAsync().catch(() => {});
   await stopBroker?.().catch(() => {});
   await events.stop().catch(() => {});
+  await limiter.close();
   await sql.end({ timeout: 5 }).catch(() => {});
   process.exit(0);
 };

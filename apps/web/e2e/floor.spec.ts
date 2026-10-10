@@ -222,10 +222,43 @@ test('forged station messages are rejected and shown in the activity log', async
   await station.close();
 });
 
+test('the audit trail shows who did what and proves nothing was altered', async () => {
+  const { page } = admin;
+  await page.goto('/audit');
+  await expect(page.getByRole('heading', { name: 'Audit trail' })).toBeVisible();
+  await expect(page.getByText(/forged or altered message rejected/).first()).toBeVisible();
+  await expect(page.getByText('Asha Verma at Crib Station 1').first()).toBeVisible();
+  await expect(page.getByText('Invited asha@tooltrace.example as Technician')).toBeVisible();
+  await page.getByRole('button', { name: 'Verify integrity' }).click();
+  await expect(page.getByText(/Chain intact: \d+ entries checked/)).toBeVisible();
+  const anchor = await page.getByLabel('Anchor', { exact: true }).innerText();
+  expect(anchor).toMatch(/^\d+:[0-9a-f]{64}$/);
+
+  // A garbled anchor is refused politely; a correct one is confirmed.
+  await page.getByLabel('Saved anchor (optional)').fill('not-an-anchor');
+  await page.getByRole('button', { name: 'Verify integrity' }).click();
+  await expect(page.getByText(/An anchor looks like/)).toBeVisible();
+  await page.getByLabel('Saved anchor (optional)').fill(anchor);
+  await page.getByRole('button', { name: 'Verify integrity' }).click();
+  await expect(page.getByText('Your saved anchor matches.')).toBeVisible();
+
+  await page.getByLabel('Show').selectOption('auth.');
+  await expect(page.getByText('Priya Nair signed in').first()).toBeVisible();
+  await expect(page.getByText(/checked out$/)).toHaveCount(0);
+  await page.getByLabel('Show').selectOption('');
+  await expectAccessible(page);
+  await page.getByLabel('Saved anchor (optional)').fill('');
+  await page.getByRole('button', { name: 'Verify integrity' }).click();
+  await expect(page.getByText(/Chain intact/)).toBeVisible();
+  await shot(page, 'audit');
+});
+
 test('technicians cannot reach admin-only screens', async () => {
   const { page } = tech;
   await page.goto('/people');
   await expect(page.getByText('Only admins and auditors can see this page.')).toBeVisible();
+  await page.goto('/audit');
+  await expect(page.getByText('Only admins and auditors can see the audit trail.')).toBeVisible();
 });
 
 test('deactivating someone signs them out everywhere', async () => {

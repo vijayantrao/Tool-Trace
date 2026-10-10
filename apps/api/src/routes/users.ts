@@ -3,17 +3,18 @@ import { z } from 'zod';
 import { ApiError, conflict, forbidden, notFound } from '../lib/errors.js';
 import { normalizeUid } from '../lib/uid.js';
 import { validate } from '../lib/validate.js';
+import { db } from '../middleware/db.js';
 import { currentUser, requireRole } from '../middleware/session.js';
 import { createInvite } from '../services/invites.js';
 import { ROLES, type AppEnv, type Deps } from '../types.js';
 
 const idParam = z.object({ id: z.uuid() });
 
-export function userRoutes({ sql, config }: Deps) {
+export function userRoutes({ config }: Deps) {
   const app = new Hono<AppEnv>();
 
   app.get('/users', requireRole('admin', 'auditor'), async (c) => {
-    const users = await sql`
+    const users = await db(c)`
       SELECT id, email, display_name, role, is_active, created_at, badge_uid
       FROM users ORDER BY created_at`;
     return c.json({ users });
@@ -21,7 +22,7 @@ export function userRoutes({ sql, config }: Deps) {
 
   /** Minimal list of people who can hold tools, for the storekeeper's "issue to" picker. */
   app.get('/holders', requireRole('admin', 'storekeeper'), async (c) => {
-    const holders = await sql`
+    const holders = await db(c)`
       SELECT id, display_name, role FROM users
       WHERE is_active AND role <> 'auditor'
       ORDER BY display_name`;
@@ -59,7 +60,8 @@ export function userRoutes({ sql, config }: Deps) {
         }
       }
 
-      const user = await sql.begin(async (tx) => {
+      const tx = db(c);
+      const user = await (async () => {
         // Serialize admin changes so two concurrent requests can't remove the last admin.
         await tx`SELECT pg_advisory_xact_lock(727274002)`;
         // Re-check the requester under the lock: they may have been demoted a moment ago.
@@ -89,7 +91,7 @@ export function userRoutes({ sql, config }: Deps) {
           await tx`DELETE FROM sessions WHERE user_id = ${id}`;
         }
         return updated;
-      });
+      })();
       return c.json({ user });
     },
   );
@@ -100,15 +102,15 @@ export function userRoutes({ sql, config }: Deps) {
     validate('json', z.object({ email: z.email().max(254), role: z.enum(ROLES) })),
     async (c) => {
       const body = c.req.valid('json');
-      const [existing] = await sql`SELECT 1 FROM users WHERE email = ${body.email.toLowerCase()}`;
+      const [existing] = await db(c)`SELECT 1 FROM users WHERE email = ${body.email.toLowerCase()}`;
       if (existing) throw conflict('account_exists', 'An account with this email already exists');
-      const invite = await createInvite(sql, config, { ...body, createdBy: currentUser(c).id });
+      const invite = await createInvite(db(c), config, { ...body, createdBy: currentUser(c).id });
       return c.json({ invite }, 201);
     },
   );
 
   app.get('/invites', requireRole('admin'), async (c) => {
-    const invites = await sql`
+    const invites = await db(c)`
       SELECT id, email, role, expires_at, created_at
       FROM invites WHERE used_at IS NULL AND expires_at > now()
       ORDER BY created_at DESC`;
@@ -117,7 +119,7 @@ export function userRoutes({ sql, config }: Deps) {
 
   app.delete('/invites/:id', requireRole('admin'), validate('param', idParam), async (c) => {
     const { id } = c.req.valid('param');
-    const deleted = await sql`DELETE FROM invites WHERE id = ${id} AND used_at IS NULL RETURNING id`;
+    const deleted = await db(c)`DELETE FROM invites WHERE id = ${id} AND used_at IS NULL RETURNING id`;
     if (deleted.length === 0) throw notFound('Pending invite');
     return c.body(null, 204);
   });

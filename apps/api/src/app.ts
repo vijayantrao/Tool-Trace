@@ -1,9 +1,12 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
 import { ApiError, errorResponse, notFound, toApiError } from './lib/errors.js';
+import { MemoryStore, rateLimit } from './lib/rate-limit.js';
 import { originGuard } from './middleware/security.js';
+import { requestTransaction } from './middleware/db.js';
 import { loadSession } from './middleware/session.js';
+import { auditRoutes } from './routes/audit.js';
 import { authRoutes } from './routes/auth.js';
 import { checkoutRoutes } from './routes/checkouts.js';
 import { dashboardRoutes } from './routes/dashboard.js';
@@ -15,9 +18,17 @@ import { StationGateway } from './stations/gateway.js';
 import type { AppEnv, Deps } from './types.js';
 
 export function createApp(
-  input: Omit<Deps, 'gateway'> & { gateway?: Deps['gateway']; sseHeartbeatMs?: number },
+  input: Omit<Deps, 'gateway' | 'limiter'> & {
+    gateway?: Deps['gateway'];
+    limiter?: Deps['limiter'];
+    sseHeartbeatMs?: number;
+  },
 ) {
-  const deps: Deps = { ...input, gateway: input.gateway ?? new StationGateway(input.sql, input.config) };
+  const deps: Deps = {
+    ...input,
+    gateway: input.gateway ?? new StationGateway(input.sql, input.config),
+    limiter: input.limiter ?? new MemoryStore(),
+  };
   const { sql, config } = deps;
   const app = new Hono<AppEnv>();
 
@@ -51,12 +62,30 @@ export function createApp(
 
   const api = new Hono<AppEnv>();
   api.use('*', loadSession(sql, config));
+  // General limit per signed-in person (sign-in itself has its own, stricter, per-IP limit).
+  const perUser = rateLimit({
+    name: 'api',
+    limit: config.API_RATE_LIMIT_PER_MINUTE,
+    windowMs: 60_000,
+    store: deps.limiter,
+    trustProxy: config.TRUST_PROXY,
+    key: (c) => (c as Context<AppEnv>).get('user')?.id ?? 'anonymous',
+  });
+  api.use('*', (c, next) => (c.get('user') ? perUser(c, next) : next()));
+  // Every data route runs in its own transaction as the restricted role, with
+  // row-level security and the audit trail seeing who is acting. Sign-in
+  // (no identity yet) and the long-lived event stream are the exceptions.
+  const inTransaction = requestTransaction(sql, config.TRUST_PROXY);
+  api.use('*', (c, next) =>
+    c.req.path.startsWith('/api/auth/') || c.req.path === '/api/events' ? next() : inTransaction(c, next),
+  );
   api.route('/auth', authRoutes(deps));
   api.route('/', userRoutes(deps));
   api.route('/', toolRoutes(deps));
   api.route('/', checkoutRoutes(deps));
   api.route('/', dashboardRoutes(deps));
   api.route('/', stationRoutes(deps));
+  api.route('/', auditRoutes(deps));
   api.route('/', eventRoutes(deps, input.sseHeartbeatMs));
   app.route('/api', api);
 

@@ -1,5 +1,5 @@
 import type { Config } from '../config.js';
-import type { Sql } from '../db.js';
+import type { Sql, TxSql } from '../db.js';
 import { hashToken, newToken } from '../lib/crypto.js';
 import type { Role } from '../types.js';
 
@@ -15,7 +15,7 @@ export interface CreatedInvite {
 }
 
 export async function createInvite(
-  sql: Sql,
+  sql: Sql | TxSql,
   config: Config,
   input: { email: string; role: Role; createdBy: string | null },
 ): Promise<CreatedInvite> {

@@ -1,0 +1,97 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    # Weekly, because new vulnerabilities are published even when the code doesn't change.
+    - cron: '23 4 * * 1'
+
+# Least privilege by default; jobs that upload results ask for exactly what they need.
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      actions: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: javascript-typescript
+            build-mode: none
+          - language: c-cpp
+            build-mode: manual
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+          queries: security-extended
+      - name: Build the firmware core (host build, same code as the ESP32)
+        if: matrix.build-mode == 'manual'
+        run: |
+          sudo apt-get install -y --no-install-recommends libssl-dev
+          make -C firmware/station/test/host
+      - uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:${{ matrix.language }}
+
+  secrets:
+    name: Secret scan (gitleaks, full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install gitleaks (pinned, checksum-verified)
+        run: |
+          curl -sSfL -o gitleaks.tgz https://github.com/gitleaks/gitleaks/releases/download/v8.28.0/gitleaks_8.28.0_linux_x64.tar.gz
+          echo "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb  gitleaks.tgz" | sha256sum -c -
+          tar xzf gitleaks.tgz -C "$RUNNER_TEMP" gitleaks
+      - name: Scan every commit
+        run: '"$RUNNER_TEMP/gitleaks" git --config .gitleaks.toml --redact --verbose .'
+
+  zap:
+    name: DAST (OWASP ZAP baseline)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Start the full stack (docker compose)
+        run: docker compose up --build -d
+      - name: Wait for the web app
+        run: |
+          for i in $(seq 1 90); do
+            curl -sf -o /dev/null http://localhost:3000/login && curl -sf -o /dev/null http://localhost:8080/healthz && exit 0
+            sleep 2
+          done
+          docker compose logs --tail 80
+          exit 1
+      - name: Passive scan (spider + baseline rules)
+        run: |
+          mkdir -p zap && chmod 777 zap
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:2.16.1 \
+            zap-baseline.py -t http://localhost:3000 -m 3 -I -J report.json -r report.html || code=$?
+          # 0 = clean, 2 = warnings only (judged below); anything else means the scan itself failed.
+          if [ "${code:-0}" != 0 ] && [ "${code:-0}" != 2 ]; then exit "$code"; fi
+      - name: Report findings (fail on high risk)
+        run: node scripts/ci/zap-report.mjs zap/report.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: zap-report
+          path: zap/
+          retention-days: 14
+      - if: always()
+        run: docker compose down -v

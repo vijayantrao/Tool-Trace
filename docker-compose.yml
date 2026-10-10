@@ -31,6 +31,8 @@ services:
       # Smart stations. This master key is for local use only: generate your own for anything real.
       STATION_MASTER_KEY: "6c6f63616c2d6f6e6c792d6d61737465722d6b65792d646f2d6e6f742d757365"
       MQTT_URL: mqtt://mqtt:1883
+      # Shared rate-limit counters, so limits hold across API replicas.
+      REDIS_URL: redis://redis:6379
     ports:
       - "8080:8080"
     depends_on:
@@ -38,6 +40,18 @@ services:
         condition: service_healthy
       mqtt:
         condition: service_started
+      redis:
+        condition: service_healthy
+
+  redis:
+    # Rate-limit counters only (nothing persistent), so no disk writes.
+    image: redis:7-alpine
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
 
   mqtt:
     # Local broker for stations and the terminal simulator. Anonymous access: local only.

@@ -160,3 +160,28 @@ export interface FloorEvent {
   message?: string;
   at: string;
 }
+
+export interface AuditEntry {
+  id: number;
+  at: string;
+  action: string;
+  entityType: string;
+  entityId: string | null;
+  entityName: string | null;
+  details: Record<string, unknown>;
+  actorIp: string | null;
+  actorUserId: string | null;
+  actorName: string | null;
+  actorStationId: string | null;
+  stationName: string | null;
+  toolAssetTag: string | null;
+  hash: string;
+}
+
+export interface AuditVerification {
+  ok: boolean;
+  checked: number;
+  head: { id: number; hash: string } | null;
+  firstProblem: { id: number; reason: 'missing_entries' | 'broken_link' | 'content_changed' } | null;
+  anchorMatches: boolean | null;
+}

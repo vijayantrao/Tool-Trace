@@ -3,7 +3,19 @@
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftRight, LayoutGrid, LogOut, Menu, QrCode, RadioTower, ScanLine, Users, Wrench, type LucideIcon } from 'lucide-react';
+import {
+  ArrowLeftRight,
+  FileClock,
+  LayoutGrid,
+  LogOut,
+  Menu,
+  QrCode,
+  RadioTower,
+  ScanLine,
+  Users,
+  Wrench,
+  type LucideIcon,
+} from 'lucide-react';
 import type { ReactNode } from 'react';
 import { api } from '@/lib/api';
 import { initials, roleLabel } from '@/lib/format';
@@ -26,6 +38,7 @@ const nav: NavItem[] = [
   { href: '/labels', label: 'QR labels', icon: QrCode, show: (m) => can.manageTools(m.role) },
   { href: '/stations', label: 'Stations', icon: RadioTower, show: (m) => can.seeStations(m.role) },
   { href: '/people', label: 'People', icon: Users, show: (m) => can.seePeople(m.role) },
+  { href: '/audit', label: 'Audit trail', icon: FileClock, show: (m) => can.seeAudit(m.role) },
 ];
 
 const isActive = (path: string, href: string) => (href === '/' ? path === '/' : path.startsWith(href));

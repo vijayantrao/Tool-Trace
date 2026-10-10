@@ -1,14 +1,16 @@
 import { Hono } from 'hono';
+import { db } from '../middleware/db.js';
 import { currentUser, requireAuth } from '../middleware/session.js';
 import { DUE_SOON_DAYS } from './tools.js';
 import type { AppEnv, Deps } from '../types.js';
 
-export function dashboardRoutes({ sql }: Deps) {
+export function dashboardRoutes(_deps: Deps) {
   const app = new Hono<AppEnv>();
 
   /** One round-trip for the home screen: floor-wide counts plus the caller's own open checkouts. */
   app.get('/dashboard', requireAuth, async (c) => {
     const user = currentUser(c);
+    const sql = db(c);
     const [counts] = await sql`
       SELECT
         count(*) FILTER (WHERE status <> 'retired')::int                       AS total,

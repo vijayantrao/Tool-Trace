@@ -3,12 +3,13 @@ import { z } from 'zod';
 import { conflict, forbidden, unauthorized } from '../lib/errors.js';
 import { checkOutTool, returnCheckout } from '../services/floor.js';
 import { validate } from '../lib/validate.js';
+import { db } from '../middleware/db.js';
 import { currentUser, requireAuth, requireRole } from '../middleware/session.js';
 import type { AppEnv, Deps } from '../types.js';
 
 const MAX_CHECKOUT_DAYS = 30;
 
-export function checkoutRoutes({ sql }: Deps) {
+export function checkoutRoutes(_deps: Deps) {
   const app = new Hono<AppEnv>();
 
   app.get(
@@ -28,7 +29,7 @@ export function checkoutRoutes({ sql }: Deps) {
       // Technicians only ever see their own checkouts, whatever filter they send.
       const holderId = user.role === 'technician' ? user.id : (f.holderId ?? null);
       const open = f.open === undefined ? null : f.open === 'true';
-      const checkouts = await sql`
+      const checkouts = await db(c)`
         SELECT c.id, c.tool_id, t.asset_tag, t.name AS tool_name,
                c.holder_id, h.display_name AS holder_name, c.issued_by,
                c.checked_out_at, c.due_back_at, c.returned_at, c.condition_on_return, c.notes,
@@ -73,14 +74,12 @@ export function checkoutRoutes({ sql }: Deps) {
         throw conflict('invalid_due_date', `Checkouts can last at most ${MAX_CHECKOUT_DAYS} days`);
       }
 
-      const checkout = await sql.begin((tx) =>
-        checkOutTool(tx, {
-          tool: b.toolId ? { id: b.toolId } : { assetTag: b.assetTag! },
-          holderId,
-          issuedBy: user.id,
-          dueBackAt: due,
-        }),
-      );
+      const checkout = await checkOutTool(db(c), {
+        tool: b.toolId ? { id: b.toolId } : { assetTag: b.assetTag! },
+        holderId,
+        issuedBy: user.id,
+        dueBackAt: due,
+      });
       return c.json({ checkout }, 201);
     },
   );
@@ -102,9 +101,12 @@ export function checkoutRoutes({ sql }: Deps) {
       const user = currentUser(c);
       if (!user) throw unauthorized();
 
-      const checkout = await sql.begin((tx) =>
-        returnCheckout(tx, { checkoutId: id, receivedBy: user.id, condition: b.condition, notes: b.notes }),
-      );
+      const checkout = await returnCheckout(db(c), {
+        checkoutId: id,
+        receivedBy: user.id,
+        condition: b.condition,
+        notes: b.notes,
+      });
       return c.json({ checkout });
     },
   );

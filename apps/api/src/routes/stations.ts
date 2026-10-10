@@ -3,12 +3,13 @@ import { z } from 'zod';
 import { ApiError, notFound } from '../lib/errors.js';
 import { formatUid } from '../lib/uid.js';
 import { validate } from '../lib/validate.js';
+import { db } from '../middleware/db.js';
 import { requireRole } from '../middleware/session.js';
 import type { AppEnv, Deps } from '../types.js';
 
 const ONLINE_WITHIN_SECONDS = 150;
 
-export function stationRoutes({ sql, gateway }: Deps) {
+export function stationRoutes({ gateway }: Deps) {
   const app = new Hono<AppEnv>();
   const idParam = z.object({ id: z.uuid() });
   const requireEnabled = () => {
@@ -37,7 +38,7 @@ export function stationRoutes({ sql, gateway }: Deps) {
   };
 
   app.get('/stations', requireRole('admin', 'storekeeper', 'auditor'), async (c) => {
-    const stations = await sql`
+    const stations = await db(c)`
       SELECT s.id, s.name, s.location_id, l.name AS location_name, s.is_active, s.key_version,
              s.last_seen_at, COALESCE(s.last_seen_at > now() - make_interval(secs => ${ONLINE_WITHIN_SECONDS}), false) AS online
       FROM stations s JOIN locations l ON l.id = s.location_id
@@ -52,7 +53,7 @@ export function stationRoutes({ sql, gateway }: Deps) {
     async (c) => {
       requireEnabled();
       const b = c.req.valid('json');
-      const [station] = await sql<{ id: string; name: string; keyVersion: number }[]>`
+      const [station] = await db(c)<{ id: string; name: string; keyVersion: number }[]>`
         INSERT INTO stations (name, location_id) VALUES (${b.name}, ${b.locationId})
         RETURNING id, name, key_version`;
       return c.json({ station, provisioning: provisioning(station!) }, 201);
@@ -62,7 +63,7 @@ export function stationRoutes({ sql, gateway }: Deps) {
   app.post('/stations/:id/rotate-key', requireRole('admin'), validate('param', idParam), async (c) => {
     const { id } = c.req.valid('param');
     requireEnabled();
-    const [station] = await sql<{ id: string; name: string; keyVersion: number }[]>`
+    const [station] = await db(c)<{ id: string; name: string; keyVersion: number }[]>`
       UPDATE stations SET key_version = key_version + 1, session_user_id = NULL, session_expires_at = NULL
       WHERE id = ${id} RETURNING id, name, key_version`;
     if (!station) throw notFound('Station');
@@ -82,7 +83,7 @@ export function stationRoutes({ sql, gateway }: Deps) {
     async (c) => {
       const { id } = c.req.valid('param');
       const b = c.req.valid('json');
-      const [station] = await sql`
+      const [station] = await db(c)`
         UPDATE stations SET name = COALESCE(${b.name ?? null}, name),
                             is_active = COALESCE(${b.isActive ?? null}::boolean, is_active)
         WHERE id = ${id} RETURNING id, name, is_active, key_version`;
@@ -97,7 +98,7 @@ export function stationRoutes({ sql, gateway }: Deps) {
     validate('query', z.object({ stationId: z.uuid().optional(), limit: z.coerce.number().int().min(1).max(200).default(50) })),
     async (c) => {
       const q = c.req.valid('query');
-      const rows = await sql<{ uid: string | null }[]>`
+      const rows = await db(c)<{ uid: string | null }[]>`
         SELECT e.id, e.station_id, s.name AS station_name, e.received_at, e.kind, e.uid, e.outcome, e.code,
                e.user_id, u.display_name AS user_name, e.tool_id, t.asset_tag
         FROM station_events e

@@ -30,4 +30,5 @@ export const can = {
   managePeople: (r?: Role) => r === 'admin',
   seeStations: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
   manageStations: (r?: Role) => r === 'admin',
+  seeAudit: (r?: Role) => r === 'admin' || r === 'auditor',
 };

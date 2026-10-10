@@ -1,8 +1,10 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from './api';
 import type {
+  AuditEntry,
+  AuditVerification,
   Checkout,
   Dashboard,
   Holder,
@@ -29,6 +31,7 @@ export const keys = {
   invites: ['invites'] as const,
   stations: ['stations'] as const,
   stationEvents: ['station-events'] as const,
+  audit: (action: string) => ['audit', action] as const,
 };
 
 const qs = (q: Record<string, string>) => {
@@ -213,3 +216,26 @@ export function useUpdateUser() {
     onSuccess: () => Promise.all([qc.invalidateQueries({ queryKey: keys.users }), qc.invalidateQueries({ queryKey: keys.holders })]),
   });
 }
+
+const AUDIT_PAGE = 50;
+
+/** The audit trail, newest first, paged by id (stable even while new entries arrive). */
+export const useAudit = (action: string, enabled: boolean) =>
+  useInfiniteQuery({
+    queryKey: keys.audit(action),
+    initialPageParam: 0,
+    queryFn: async ({ pageParam }) =>
+      (
+        await api<{ entries: AuditEntry[] }>(
+          `/audit${qs({ action, limit: String(AUDIT_PAGE), before: pageParam ? String(pageParam) : '' })}`,
+        )
+      ).entries,
+    getNextPageParam: (last) => (last.length === AUDIT_PAGE ? last[last.length - 1]!.id : undefined),
+    enabled,
+  });
+
+export const useVerifyAudit = () =>
+  useMutation({
+    mutationFn: (anchor?: { id: number; hash: string }) =>
+      api<AuditVerification>(`/audit/verify${anchor ? qs({ anchorId: String(anchor.id), anchorHash: anchor.hash }) : ''}`),
+  });

@@ -13,8 +13,9 @@
 import { createHmac } from 'node:crypto';
 import { z } from 'zod';
 import type { Config } from '../config.js';
-import type { Sql } from '../db.js';
-import { ApiError } from '../lib/errors.js';
+import type { Sql, TxSql } from '../db.js';
+import { ApiError, toApiError } from '../lib/errors.js';
+import { enterAppRole, setActorUser } from '../middleware/db.js';
 import { normalizeUid } from '../lib/uid.js';
 import { checkOutTool, returnCheckout } from '../services/floor.js';
 import { decodeMasterKey, deriveStationKey, verify, type StationMessage } from './crypto.js';
@@ -118,10 +119,11 @@ export class StationGateway {
   }
 
   private async log(
+    tx: TxSql,
     stationId: string,
     e: { kind: 'hello' | 'tap'; uid?: string | null; outcome: 'accepted' | 'rejected'; code: string; userId?: string | null; toolId?: string | null },
   ) {
-    await this.sql`
+    await tx`
       INSERT INTO station_events (station_id, kind, uid, outcome, code, user_id, tool_id)
       VALUES (${stationId}, ${e.kind}, ${e.uid ?? null}, ${e.outcome}, ${e.code}, ${e.userId ?? null}, ${e.toolId ?? null})`;
   }
@@ -148,11 +150,27 @@ export class StationGateway {
     if (!match || !topic.startsWith(`${this.topicPrefix}/`)) return { outcome: 'ignored', code: 'bad_topic' };
     const stationId = match[1]!;
 
-    const [station] = await this.sql<StationRow[]>`
+    // One transaction per message, running as the restricted role in the
+    // "station" context: row-level security lets it touch only this station's
+    // row and issue tools only to the person who badged in.
+    const result = await this.sql.begin((tx) =>
+      enterAppRole(tx, { role: 'station', stationId }, { write: true }).then(() => this.decide(tx, stationId, payload)),
+    );
+    // Reply only after the decision is committed, so the screen never shows a change that was rolled back.
+    if (result.reply) {
+      await this.publish(this.repliesTopic(stationId), JSON.stringify(result.reply)).catch((err: Error) =>
+        console.warn(`[stations] could not deliver reply to ${stationId}: ${err.message}`),
+      );
+    }
+    return result;
+  }
+
+  private async decide(tx: TxSql, stationId: string, payload: Buffer): Promise<Outcome> {
+    const [station] = await tx<StationRow[]>`
       SELECT id, name, is_active, key_version FROM stations WHERE id = ${stationId}`;
     if (!station) return { outcome: 'ignored', code: 'unknown_station' };
     if (!station.isActive) {
-      await this.log(stationId, { kind: 'hello', outcome: 'rejected', code: 'station_inactive' });
+      await this.log(tx, stationId, { kind: 'hello', outcome: 'rejected', code: 'station_inactive' });
       return { outcome: 'rejected', code: 'station_inactive' };
     }
 
@@ -161,38 +179,38 @@ export class StationGateway {
       if (payload.length > MAX_PAYLOAD_BYTES) throw new Error('too large');
       parsed = messageSchema.parse(JSON.parse(payload.toString('utf8')));
     } catch {
-      await this.log(stationId, { kind: 'tap', outcome: 'rejected', code: 'malformed' });
+      await this.log(tx, stationId, { kind: 'tap', outcome: 'rejected', code: 'malformed' });
       return { outcome: 'rejected', code: 'malformed' };
     }
     const { sig, ...msg } = parsed;
     const message = msg as StationMessage;
 
     if (!verify(this.keyFor(stationId, station.keyVersion), stationId, message, sig)) {
-      await this.log(stationId, { kind: message.type, uid: message.uid || null, outcome: 'rejected', code: 'bad_signature' });
+      await this.log(tx, stationId, { kind: message.type, uid: message.uid || null, outcome: 'rejected', code: 'bad_signature' });
       return { outcome: 'rejected', code: 'bad_signature' };
     }
 
     if (Math.abs(message.seq - Date.now()) > MAX_CLOCK_SKEW_MS) {
-      await this.log(stationId, { kind: message.type, outcome: 'rejected', code: 'stale_clock' });
+      await this.log(tx, stationId, { kind: message.type, outcome: 'rejected', code: 'stale_clock' });
       return { outcome: 'rejected', code: 'stale_clock' };
     }
     // Atomic replay check: only one message with a given (or lower) sequence can ever pass.
-    const fresh = await this.sql`
+    const fresh = await tx`
       UPDATE stations SET last_seq = ${message.seq}, last_seen_at = now()
       WHERE id = ${stationId} AND last_seq < ${message.seq}
       RETURNING id`;
     if (fresh.length === 0) {
-      await this.log(stationId, { kind: message.type, outcome: 'rejected', code: 'replay' });
+      await this.log(tx, stationId, { kind: message.type, outcome: 'rejected', code: 'replay' });
       return { outcome: 'rejected', code: 'replay' };
     }
 
     if (!this.allow(stationId)) {
-      await this.log(stationId, { kind: message.type, outcome: 'rejected', code: 'rate_limited' });
+      await this.log(tx, stationId, { kind: message.type, outcome: 'rejected', code: 'rate_limited' });
       return { outcome: 'rejected', code: 'rate_limited' };
     }
 
     const respond = async (code: string, ok: boolean, led: Led, l1: string, l2: string, extra: { userId?: string; toolId?: string } = {}) => {
-      await this.log(stationId, {
+      await this.log(tx, stationId, {
         kind: message.type,
         uid: message.uid || null,
         outcome: ok ? 'accepted' : 'rejected',
@@ -200,11 +218,6 @@ export class StationGateway {
         ...extra,
       });
       const reply = this.signReply(stationId, station.keyVersion, { seq: message.seq, ok, led, l1, l2 });
-      // The decision is already committed; a lost reply must not turn it into an error.
-      // The station shows "No answer" and the person can check the board.
-      await this.publish(this.repliesTopic(stationId), JSON.stringify(reply)).catch((err: Error) =>
-        console.warn(`[stations] could not deliver reply to ${station.name}: ${err.message}`),
-      );
       return { outcome: ok ? 'accepted' : 'rejected', code, reply } as Outcome;
     };
 
@@ -214,13 +227,13 @@ export class StationGateway {
     if (!uid) return respond('bad_uid', false, 'red', 'Unreadable tag', 'Try again');
 
     // 1. Is it a badge?
-    const [person] = await this.sql<{ id: string; displayName: string; role: string; isActive: boolean }[]>`
+    const [person] = await tx<{ id: string; displayName: string; role: string; isActive: boolean }[]>`
       SELECT id, display_name, role, is_active FROM users WHERE badge_uid = ${uid}`;
     if (person) {
       if (!person.isActive || person.role === 'auditor') {
         return respond('badge_not_allowed', false, 'red', 'Badge not allowed', 'See the crib', { userId: person.id });
       }
-      await this.sql`
+      await tx`
         UPDATE stations SET session_user_id = ${person.id},
                session_expires_at = now() + make_interval(secs => ${this.config.STATION_SESSION_SECONDS})
         WHERE id = ${stationId}`;
@@ -228,29 +241,32 @@ export class StationGateway {
     }
 
     // 2. Is it a tool tag?
-    const [tool] = await this.sql<{ id: string; assetTag: string; status: string }[]>`
+    const [tool] = await tx<{ id: string; assetTag: string; status: string }[]>`
       SELECT id, asset_tag, status FROM tools WHERE rfid_uid = ${uid}`;
     if (!tool) return respond('unknown_tag', false, 'red', 'Unknown tag', 'Ask the crib');
 
-    const [session] = await this.sql<{ userId: string; displayName: string }[]>`
+    const [session] = await tx<{ userId: string; displayName: string }[]>`
       SELECT u.id AS user_id, u.display_name FROM stations s JOIN users u ON u.id = s.session_user_id
       WHERE s.id = ${stationId} AND s.session_expires_at > now() AND u.is_active AND u.role <> 'auditor'`;
     if (!session) return respond('badge_first', false, 'amber', 'Tap your badge', 'first', { toolId: tool.id });
 
+    // From here on, the person who badged in is the actor (for row-level security and the audit trail).
+    await setActorUser(tx, session.userId);
     // Keep the session alive while someone taps several tools in a row.
-    await this.sql`
+    await tx`
       UPDATE stations SET session_expires_at = now() + make_interval(secs => ${this.config.STATION_SESSION_SECONDS})
       WHERE id = ${stationId}`;
     const who = { userId: session.userId, toolId: tool.id };
 
     try {
+      // A savepoint, so a refused check-out still lets us record why.
       if (tool.status === 'checked_out') {
         const problem = message.flag === 'problem';
-        await this.sql.begin(async (tx) => {
-          const [open] = await tx<{ id: string }[]>`
-            SELECT id FROM checkouts WHERE tool_id = ${tool.id} AND returned_at IS NULL FOR UPDATE`;
+        await tx.savepoint(async (sp) => {
+          const [open] = await sp<{ id: string }[]>`
+            SELECT id FROM checkouts WHERE tool_id = ${tool.id} AND returned_at IS NULL`;
           if (!open) throw new ApiError(409, 'not_checked_out', 'Not checked out');
-          await returnCheckout(tx, {
+          await returnCheckout(sp, {
             checkoutId: open.id,
             receivedBy: session.userId,
             condition: problem ? 'damaged' : 'ok',
@@ -264,12 +280,12 @@ export class StationGateway {
       }
 
       const due = new Date(Date.now() + this.config.STATION_CHECKOUT_HOURS * 3_600_000);
-      await this.sql.begin((tx) =>
-        checkOutTool(tx, { tool: { id: tool.id }, holderId: session.userId, issuedBy: session.userId, dueBackAt: due, stationId }),
+      await tx.savepoint((sp) =>
+        checkOutTool(sp, { tool: { id: tool.id }, holderId: session.userId, issuedBy: session.userId, dueBackAt: due, stationId }),
       );
       return respond('checked_out', true, 'green', `${tool.assetTag} is yours`, `Due in ${this.config.STATION_CHECKOUT_HOURS} h`, who);
     } catch (err) {
-      const code = err instanceof ApiError ? err.code : 'internal_error';
+      const { code } = toApiError(err);
       if (code === 'calibration_expired') return respond(code, false, 'red', 'LOCKED', 'Calibration expired', who);
       if (code === 'tool_unavailable') {
         return respond(code, false, 'red', 'Not available', tool.status === 'quarantined' ? 'Quarantined' : tool.status, who);

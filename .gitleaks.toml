@@ -1,0 +1,13 @@
+# Secret scanning (gitleaks). Runs in CI over the full git history.
+# Keep this allowlist tiny: every entry must be a value that is public on purpose.
+title = "ToolTrace gitleaks config"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Published HMAC test vectors shared by the API, firmware and Python tests (not real keys)"
+paths = [
+  '''^firmware/station/test/vectors\.json$''',
+  '''^firmware/station/test/host/vectors\.h$''',
+]

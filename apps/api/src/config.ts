@@ -23,6 +23,10 @@ const schema = z.object({
   SESSION_TTL_HOURS: z.coerce.number().int().min(1).max(168).default(12),
   INVITE_TTL_HOURS: z.coerce.number().int().min(1).max(336).default(72),
   AUTH_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(30),
+  /** Requests per minute per signed-in person, across the whole API. */
+  API_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(300),
+  /** Shared rate-limit counters, e.g. rediss://default:pass@xyz.upstash.io:6379. In memory if unset. */
+  REDIS_URL: z.string().optional(),
 
   // --- Smart tool stations (optional) ---------------------------------------
   /** Secret from which every station's signing key is derived. 32+ random bytes, hex or base64. */
