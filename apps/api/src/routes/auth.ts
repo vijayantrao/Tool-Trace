@@ -210,8 +210,9 @@ export function authRoutes({ sql, config, limiter }: Deps) {
   app.post('/login/verify', validate('json', z.object({ response: authenticationResponse })), async (c) => {
     const { response } = c.req.valid('json');
     // Every failed sign-in is recorded in the audit trail, with the reason (never shown to the client).
-    const authFailed = (reason: string, userId?: string) => {
-      void auditEvent(sql, {
+    // Awaited, so the record exists before the reply (and every failure path costs the same).
+    const authFailed = async (reason: string, userId?: string) => {
+      await auditEvent(sql, {
         action: 'auth.sign_in_failed',
         entityType: 'user',
         entityId: userId ?? null,
@@ -237,13 +238,13 @@ export function authRoutes({ sql, config, limiter }: Deps) {
       FROM passkeys p JOIN users u ON u.id = p.user_id
       WHERE p.id = ${response.id}`;
     // Same error for every failure, so attackers can't probe which credentials exist.
-    if (!cred) throw authFailed('unknown_credential');
-    if (!cred.isActive) throw authFailed('account_deactivated', cred.userId);
+    if (!cred) throw await authFailed('unknown_credential');
+    if (!cred.isActive) throw await authFailed('account_deactivated', cred.userId);
     if (
       response.response.userHandle &&
       response.response.userHandle !== isoBase64URL.fromBuffer(new Uint8Array(cred.webauthnUserId))
     ) {
-      throw authFailed('user_handle_mismatch', cred.userId);
+      throw await authFailed('user_handle_mismatch', cred.userId);
     }
 
     let verification;
@@ -262,9 +263,9 @@ export function authRoutes({ sql, config, limiter }: Deps) {
         },
       });
     } catch {
-      throw authFailed('signature_invalid', cred.userId);
+      throw await authFailed('signature_invalid', cred.userId);
     }
-    if (!verification.verified) throw authFailed('signature_invalid', cred.userId);
+    if (!verification.verified) throw await authFailed('signature_invalid', cred.userId);
 
     await sql.begin(async (tx) => {
       await tx`SELECT pg_advisory_xact_lock(${AUDIT_LOCK_ID})`;

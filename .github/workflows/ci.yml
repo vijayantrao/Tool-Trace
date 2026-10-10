@@ -51,7 +51,7 @@ jobs:
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
       - run: npm run typecheck
-      - run: npm test
+      - run: scripts/ci/run.sh "API tests" npm test
       - run: npm run build
 
   e2e:
@@ -82,7 +82,7 @@ jobs:
       - run: npm run build -w apps/web
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
-      - run: npm run test:e2e
+      - run: scripts/ci/run.sh "Browser tests" npm run test:e2e
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -129,10 +129,10 @@ jobs:
       # vulnerabilities that already have a fix (so there is something to do about it).
       - name: Scan API image
         run: |
-          "$RUNNER_TEMP/grype" tooltrace-api:ci --only-fixed -o json --file grype-api.json
+          scripts/ci/run.sh "Grype (API image)" "$RUNNER_TEMP/grype" tooltrace-api:ci --only-fixed -o json --file grype-api.json
           node scripts/ci/grype-report.mjs grype-api.json "API image"
       - name: Scan web image
         if: success() || failure()
         run: |
-          "$RUNNER_TEMP/grype" tooltrace-web:ci --only-fixed -o json --file grype-web.json
+          scripts/ci/run.sh "Grype (web image)" "$RUNNER_TEMP/grype" tooltrace-web:ci --only-fixed -o json --file grype-web.json
           node scripts/ci/grype-report.mjs grype-web.json "Web image"

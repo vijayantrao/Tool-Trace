@@ -275,7 +275,6 @@ describe('tamper-evident audit trail', () => {
     const client = h.client();
     const opts = await client.post('/api/auth/login/options');
     expect((await client.post('/api/auth/login/verify', { response: stranger.get(opts.body) })).status).toBe(401);
-    await new Promise((r) => setTimeout(r, 200)); // written asynchronously
     const res = await auditor.client.get('/api/audit?action=auth.sign_in_failed');
     expect(res.body.entries[0].details.reason).toBe('unknown_credential');
   });
