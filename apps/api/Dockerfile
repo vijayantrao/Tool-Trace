@@ -17,6 +17,8 @@ RUN npm ci --workspace apps/api --include-workspace-root --omit=dev
 
 FROM node:26-alpine
 ENV NODE_ENV=production PORT=8080
+# The runtime never uses npm, yarn or corepack: remove them (and their bundled dependencies' CVEs).
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
 COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist

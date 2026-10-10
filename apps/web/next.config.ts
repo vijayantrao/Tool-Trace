@@ -40,6 +40,11 @@ const config: NextConfig = {
           // Camera is needed for the QR scanner; nothing else.
           { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=()' },
           { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains' },
+          // Cross-origin isolation: no other site can open us in a shared browsing context or
+          // embed our responses, which blocks Spectre-style side-channel reads.
+          { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
+          { key: 'Cross-Origin-Resource-Policy', value: 'same-origin' },
+          { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
         ],
       },
       {

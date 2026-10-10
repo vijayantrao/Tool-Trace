@@ -291,6 +291,9 @@ test('pages are served with strict security headers', async ({ request }) => {
   expect(h['x-frame-options']).toBe('DENY');
   expect(h['x-content-type-options']).toBe('nosniff');
   expect(h['permissions-policy']).toContain('camera=(self)');
+  expect(h['cross-origin-opener-policy']).toBe('same-origin');
+  expect(h['cross-origin-resource-policy']).toBe('same-origin');
+  expect(h['cross-origin-embedder-policy']).toBe('require-corp');
   expect(h['x-powered-by']).toBeUndefined();
 });
 

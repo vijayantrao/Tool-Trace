@@ -116,6 +116,7 @@ Each row names the defense, where it is implemented, and the test that proves it
 | XSS steals the session | `HttpOnly` cookie; React escapes output; CSP `frame-ancestors 'none'`, `object-src 'none'`, `connect-src 'self'` | e2e security headers test, ZAP |
 | Error messages leak internals | One generic error envelope; unexpected errors are logged server-side and returned as a plain 500 | `lib/errors.ts` |
 | Invite token in server logs | Token sits in the URL fragment, which browsers never send; it's wiped from the address bar once read | e2e invite test |
+| Spectre-style side-channel reads by another site | Cross-origin isolation: `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy` and `Cross-Origin-Embedder-Policy` on every page | e2e security headers test, ZAP rule 90004 |
 | Shared tablet shows a previous user's data | Service worker never caches `/api`; `Cache-Control: no-store` | e2e |
 
 ### D: Denial of service

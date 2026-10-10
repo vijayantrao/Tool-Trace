@@ -33,7 +33,7 @@ jobs:
           - language: c-cpp
             build-mode: manual
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
@@ -52,7 +52,7 @@ jobs:
     name: Secret scan (gitleaks, full history)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Install gitleaks (pinned, checksum-verified)
@@ -67,7 +67,7 @@ jobs:
     name: DAST (OWASP ZAP baseline)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Start the full stack (docker compose)
         run: docker compose up --build -d
       - name: Wait for the web app
@@ -78,10 +78,11 @@ jobs:
           done
           docker compose logs --tail 80
           exit 1
+      # Latest stable ZAP on purpose: a DAST scanner is only as good as its newest rules.
       - name: Passive scan (spider + baseline rules)
         run: |
           mkdir -p zap && chmod 777 zap
-          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:2.16.1 \
+          docker run --rm --network host -v "$PWD/zap:/zap/wrk:rw" ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t http://localhost:3000 -m 3 -I -J report.json -r report.html || code=$?
           # 0 = clean, 2 = warnings only (judged below); anything else means the scan itself failed.
           if [ "${code:-0}" != 0 ] && [ "${code:-0}" != 2 ]; then exit "$code"; fi

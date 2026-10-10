@@ -43,7 +43,7 @@ jobs:
       # Also runs the shared-rate-limit tests against a real Redis.
       REDIS_TEST_URL: redis://localhost:6379
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -73,7 +73,7 @@ jobs:
       E2E_DATABASE_URL: postgres://postgres:postgres@localhost:5432/tooltrace_e2e
       NEXT_TELEMETRY_DISABLED: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -97,7 +97,7 @@ jobs:
       run:
         working-directory: firmware/station
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: sudo apt-get install -y --no-install-recommends libssl-dev
       - name: Host tests (shared signing vectors)
         run: make -C test/host
@@ -117,7 +117,7 @@ jobs:
     name: Docker images - build and CVE scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: docker build -f apps/api/Dockerfile -t tooltrace-api:ci .
       - run: docker build -f apps/web/Dockerfile -t tooltrace-web:ci .
       - name: Install Grype (pinned, checksum-verified)
@@ -125,8 +125,14 @@ jobs:
           curl -sSfL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.92.2/grype_0.92.2_linux_amd64.tar.gz
           echo "0b378a8d4153aa71d9ce95a3597f241a90f98b957a5694041d0ec04c6600b115  grype.tgz" | sha256sum -c -
           tar xzf grype.tgz -C "$RUNNER_TEMP" grype
-      # Fails only on critical vulnerabilities that already have a fix (so the fix is actionable).
+      # Findings become annotations and a job summary. Fails only on critical
+      # vulnerabilities that already have a fix (so there is something to do about it).
       - name: Scan API image
-        run: '"$RUNNER_TEMP/grype" tooltrace-api:ci --only-fixed --fail-on critical'
+        run: |
+          "$RUNNER_TEMP/grype" tooltrace-api:ci --only-fixed -o json --file grype-api.json
+          node scripts/ci/grype-report.mjs grype-api.json "API image"
       - name: Scan web image
-        run: '"$RUNNER_TEMP/grype" tooltrace-web:ci --only-fixed --fail-on critical'
+        if: success() || failure()
+        run: |
+          "$RUNNER_TEMP/grype" tooltrace-web:ci --only-fixed -o json --file grype-web.json
+          node scripts/ci/grype-report.mjs grype-web.json "Web image"

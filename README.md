@@ -142,7 +142,7 @@ Green parts are built. Dashed parts are on the roadmap.
 | Bugs that bypass the API | Calibration lockout and the one-checkout-per-tool rule are enforced **inside PostgreSQL** (trigger and partial unique index) |
 | Information leaks | Strict security headers (CSP `default-src 'none'`, HSTS, nosniff, no-referrer), `Cache-Control: no-store`, 64 KB body limit, generic error messages |
 | Cross-site cookie problems | The web app proxies `/api` itself, so the browser only ever talks to one origin and the session cookie stays first-party. The proxy forwards an explicit allow-list of headers and rejects path tricks like `..%2f` |
-| Clickjacking, injected scripts, rogue device access | Web app CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, and a Permissions-Policy that allows the camera (for QR scanning) and nothing else |
+| Clickjacking, injected scripts, rogue device access | Web app CSP with `frame-ancestors 'none'`, `X-Frame-Options: DENY`, cross-origin isolation (COOP, CORP, COEP), and a Permissions-Policy that allows the camera (for QR scanning) and nothing else |
 | Open redirects after sign-in | The `?next=` target is only followed if it is a same-site path |
 | Stale data on a shared tablet | The service worker never caches `/api` responses. Only static assets and an offline page are cached |
 | Forged station taps | Every station message is signed with HMAC-SHA256 using a per-station key; unsigned or altered messages are rejected and logged, with no reply |

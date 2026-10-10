@@ -13,6 +13,8 @@ RUN npm run build --workspace apps/web
 # Minimal runtime: only the traced server files, static assets and public folder.
 FROM node:22-alpine
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+# The runtime never uses npm, yarn or corepack: remove them (and their bundled dependencies' CVEs).
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 WORKDIR /app
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
