@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Build context: repository root  ->  docker build -f apps/web/Dockerfile .
 
-FROM node:22-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1 NEXT_OUTPUT=standalone
 COPY package.json package-lock.json ./
@@ -11,7 +11,7 @@ COPY apps/web apps/web
 RUN npm run build --workspace apps/web
 
 # Minimal runtime: only the traced server files, static assets and public folder.
-FROM node:22-alpine
+FROM node:25-alpine
 ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
 # Patch OS packages to the latest fixes, and remove npm, yarn and corepack: the runtime
 # never uses them, so they would only add attack surface (and their dependencies' CVEs).
