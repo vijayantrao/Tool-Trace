@@ -122,8 +122,8 @@ jobs:
       - run: docker build -f apps/web/Dockerfile -t tooltrace-web:ci .
       - name: Install Grype (pinned, checksum-verified)
         run: |
-          curl -sSfL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.92.2/grype_0.92.2_linux_amd64.tar.gz
-          echo "0b378a8d4153aa71d9ce95a3597f241a90f98b957a5694041d0ec04c6600b115  grype.tgz" | sha256sum -c -
+          curl -sSfL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.120.1/grype_0.120.1_linux_amd64.tar.gz
+          echo "0a9ee97ef5ae2ee953b0a80098105052e846cdbe319a57d808b519c33cd1343d  grype.tgz" | sha256sum -c -
           tar xzf grype.tgz -C "$RUNNER_TEMP" grype
       # Findings become annotations and a job summary. Fails only on critical
       # vulnerabilities that already have a fix (so there is something to do about it).

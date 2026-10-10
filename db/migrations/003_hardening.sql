@@ -10,15 +10,26 @@
 -- ===========================================================================
 -- 1. The application role
 -- ===========================================================================
+-- Roles are cluster-wide, so several databases on one server (parallel test
+-- databases, staging next to production) may run this at the same moment.
+-- "Someone else just created it" is success, not an error.
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'tooltrace_app') THEN
-        CREATE ROLE tooltrace_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+        BEGIN
+            CREATE ROLE tooltrace_app NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOBYPASSRLS;
+        EXCEPTION WHEN duplicate_object OR unique_violation THEN
+            NULL;
+        END;
     END IF;
+    -- The account the API connects with must be able to switch into it.
+    BEGIN
+        EXECUTE format('GRANT tooltrace_app TO %I', current_user);
+    EXCEPTION WHEN duplicate_object OR unique_violation THEN
+        NULL;
+    END;
 END
 $$;
--- The account the API connects with must be able to switch into it.
-GRANT tooltrace_app TO CURRENT_USER;
 
 -- Request context, set per transaction by the API (SET LOCAL semantics).
 CREATE FUNCTION app_role() RETURNS text LANGUAGE sql STABLE AS
