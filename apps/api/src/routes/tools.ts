@@ -25,7 +25,16 @@ const toolColumns = (sql: Deps['sql']) => sql`
     WHEN t.calibration_due_on <= current_date + ${DUE_SOON_DAYS}::int THEN 'due_soon'
     ELSE 'ok'
   END AS calibration_state,
+  co.holder_id, h.display_name AS holder_name, co.due_back_at,
+  COALESCE(co.due_back_at < now(), false) AS overdue,
   t.created_at, t.updated_at`;
+
+/** Tools joined with their location and current open checkout (if any). */
+const toolFrom = (sql: Deps['sql']) => sql`
+  tools t
+  JOIN locations l ON l.id = t.home_location_id
+  LEFT JOIN checkouts co ON co.tool_id = t.id AND co.returned_at IS NULL
+  LEFT JOIN users h ON h.id = co.holder_id`;
 
 export function toolRoutes({ sql }: Deps) {
   const app = new Hono<AppEnv>();
@@ -65,7 +74,7 @@ export function toolRoutes({ sql }: Deps) {
       const tools = await sql`
         SELECT * FROM (
           SELECT ${toolColumns(sql)}
-          FROM tools t JOIN locations l ON l.id = t.home_location_id
+          FROM ${toolFrom(sql)}
         ) x
         WHERE (${f.status ?? null}::tool_status IS NULL OR x.status = ${f.status ?? null}::tool_status)
           AND (${f.calibration ?? null}::text IS NULL OR x.calibration_state = ${f.calibration ?? null})
@@ -79,7 +88,7 @@ export function toolRoutes({ sql }: Deps) {
   const getTool = async (where: { id?: string; assetTag?: string }) => {
     const [tool] = await sql`
       SELECT ${toolColumns(sql)}
-      FROM tools t JOIN locations l ON l.id = t.home_location_id
+      FROM ${toolFrom(sql)}
       WHERE ${where.id ? sql`t.id = ${where.id}` : sql`t.asset_tag = ${where.assetTag!}`}`;
     if (!tool) throw notFound('Tool');
     const [openCheckout] = await sql`

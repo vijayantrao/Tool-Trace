@@ -176,3 +176,34 @@ describe('returns and calibration', () => {
     expect(res.status).toBe(409);
   });
 });
+
+describe('dashboard', () => {
+  it('summarises the floor and lists the caller\'s own open checkouts', async () => {
+    const res = await tech.client.get('/api/dashboard');
+    expect(res.status).toBe(200);
+    const [expected] = await h.sql`
+      SELECT count(*) FILTER (WHERE status <> 'retired')::int AS total,
+             count(*) FILTER (WHERE status = 'checked_out')::int AS checked_out
+      FROM tools`;
+    expect(res.body.counts.total).toBe(expected!.total);
+    expect(res.body.counts.checkedOut).toBe(expected!.checkedOut);
+    expect(res.body.myCheckouts.every((c: { assetTag: string }) => typeof c.assetTag === 'string')).toBe(true);
+    const [mine] = await h.sql`SELECT count(*)::int AS n FROM checkouts WHERE holder_id = ${tech.user.id} AND returned_at IS NULL`;
+    expect(res.body.myCheckouts).toHaveLength(mine!.n);
+  });
+
+  it('shows who holds each tool in the tool list', async () => {
+    const res = await sk.client.get('/api/tools?status=checked_out');
+    expect(res.body.tools.length).toBeGreaterThan(0);
+    for (const t of res.body.tools) {
+      expect(t.holderName).toBeTruthy();
+      expect(t.dueBackAt).toBeTruthy();
+    }
+    const free = await sk.client.get('/api/tools?status=available');
+    for (const t of free.body.tools) expect(t.holderId).toBeNull();
+  });
+
+  it('requires sign-in', async () => {
+    expect((await h.client().get('/api/dashboard')).status).toBe(401);
+  });
+});

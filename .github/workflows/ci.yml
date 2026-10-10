@@ -43,9 +43,46 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  e2e:
+    name: Web - browser tests with real passkeys
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      E2E_DATABASE_URL: postgres://postgres:postgres@localhost:5432/tooltrace_e2e
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w apps/web
+      - run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces
+          path: apps/web/test-results
+          retention-days: 7
+
   docker:
-    name: Docker image builds
+    name: Docker images build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f apps/api/Dockerfile -t tooltrace-api:ci .
+      - run: docker build -f apps/web/Dockerfile -t tooltrace-web:ci .

@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/*
+  ToolTrace design tokens
+  Grounded in the tool crib: machine-paint green, pegboard grey, safety yellow,
+  lockout red, and calibration-sticker green.
+*/
+:root {
+  --board: #e6ebe7;      /* pegboard */
+  --panel: #f7f9f7;      /* work surface */
+  --ink: #17201c;        /* text */
+  --muted: #56645e;      /* secondary text */
+  --line: #c6cfc9;       /* rules, outlines */
+  --peg: #cdd5cf;        /* pegboard holes */
+  --machine: #2f5546;    /* machine-paint green: primary actions, rail */
+  --machine-ink: #f3f7f4;
+  --safety: #f2c12e;     /* safety yellow: scan, due soon */
+  --safety-ink: #241c03;
+  --signal: #b8332a;     /* lockout red: expired, overdue, quarantine */
+  --signal-soft: #f6dedb;
+  --ok: #2b7a4b;         /* calibration sticker green */
+  --ok-soft: #dcefe3;
+  --due-soft: #fbf0c8;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --board: #121816;
+    --panel: #1a221f;
+    --ink: #e4ebe7;
+    --muted: #93a29b;
+    --line: #2d3934;
+    --peg: #222c28;
+    --machine: #4d7f6b;
+    --machine-ink: #f3f7f4;
+    --safety: #e9b822;
+    --safety-ink: #1d1602;
+    --signal: #e2584c;
+    --signal-soft: #3a1f1c;
+    --ok: #52b37c;
+    --ok-soft: #183026;
+    --due-soft: #3a3115;
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Barlow Condensed", "Barlow", ui-sans-serif, sans-serif;
+
+  --color-board: var(--board);
+  --color-panel: var(--panel);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-peg: var(--peg);
+  --color-machine: var(--machine);
+  --color-machine-ink: var(--machine-ink);
+  --color-safety: var(--safety);
+  --color-safety-ink: var(--safety-ink);
+  --color-signal: var(--signal);
+  --color-signal-soft: var(--signal-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-due-soft: var(--due-soft);
+}
+
+@layer base {
+  html {
+    font-family: var(--font-sans);
+    background: var(--board);
+    color: var(--ink);
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  body {
+    min-height: 100dvh;
+    font-size: 1rem;
+    line-height: 1.5;
+  }
+  :focus-visible {
+    outline: 3px solid var(--safety);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  h1, h2, h3 {
+    font-family: var(--font-display);
+    line-height: 1.1;
+    letter-spacing: 0.005em;
+  }
+}
+
+@layer components {
+  /* Pegboard: the shadow-board backdrop. Used only where tools hang. */
+  .pegboard {
+    background-color: var(--board);
+    background-image: radial-gradient(circle at center, var(--peg) 2.2px, transparent 2.6px);
+    background-size: 22px 22px;
+    background-position: 11px 11px;
+  }
+
+  /* Asset tag plate: the engraved aluminium tag riveted to every tool. */
+  .tag-plate {
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@media print {
+  html, body { background: white !important; color: black !important; }
+  .no-print { display: none !important; }
+}

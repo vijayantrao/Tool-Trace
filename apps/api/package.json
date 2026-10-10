@@ -11,7 +11,8 @@
     "test": "vitest run",
     "migrate": "tsx src/scripts/migrate.ts",
     "bootstrap-admin": "tsx src/scripts/bootstrap-admin.ts",
-    "seed:demo": "tsx src/scripts/seed-demo.ts"
+    "seed:demo": "tsx src/scripts/seed-demo.ts",
+    "start:dev": "tsx src/index.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.4",

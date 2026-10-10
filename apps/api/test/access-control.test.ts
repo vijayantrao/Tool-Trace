@@ -49,6 +49,15 @@ describe('role-based access control', () => {
     expect(Buffer.from(row!.tokenHash).toString('base64url')).not.toBe(res.body.invite.token);
   });
 
+  it('storekeepers can list people to issue tools to, without seeing emails', async () => {
+    const res = await storekeeper.client.get('/api/holders');
+    expect(res.status).toBe(200);
+    expect(res.body.holders.length).toBeGreaterThan(0);
+    expect(res.body.holders.every((u: { role: string }) => u.role !== 'auditor')).toBe(true);
+    expect(res.body.holders[0]).not.toHaveProperty('email');
+    expect((await technician.client.get('/api/holders')).status).toBe(403);
+  });
+
   it('auditors are read-only', async () => {
     expect((await auditor.client.get('/api/tools')).status).toBe(200);
     expect((await auditor.client.get('/api/users')).status).toBe(200);

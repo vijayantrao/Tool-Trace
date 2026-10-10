@@ -6,3 +6,11 @@ coverage/
 !.env.example
 *.log
 .DS_Store
+.next/
+apps/web/e2e/.state.json
+test-results/
+playwright-report/
+*.tsbuildinfo
+
+# Local one-click launchers placed on a developer machine
+/RUN-*.cmd

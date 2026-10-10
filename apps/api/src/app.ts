@@ -6,6 +6,7 @@ import { originGuard } from './middleware/security.js';
 import { loadSession } from './middleware/session.js';
 import { authRoutes } from './routes/auth.js';
 import { checkoutRoutes } from './routes/checkouts.js';
+import { dashboardRoutes } from './routes/dashboard.js';
 import { toolRoutes } from './routes/tools.js';
 import { userRoutes } from './routes/users.js';
 import type { AppEnv, Deps } from './types.js';
@@ -48,6 +49,7 @@ export function createApp(deps: Deps) {
   api.route('/', userRoutes(deps));
   api.route('/', toolRoutes(deps));
   api.route('/', checkoutRoutes(deps));
+  api.route('/', dashboardRoutes(deps));
   app.route('/api', api);
 
   app.notFound((c) => errorResponse(c, notFound('Route')));

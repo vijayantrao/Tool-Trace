@@ -18,6 +18,15 @@ export function userRoutes({ sql, config }: Deps) {
     return c.json({ users });
   });
 
+  /** Minimal list of people who can hold tools, for the storekeeper's "issue to" picker. */
+  app.get('/holders', requireRole('admin', 'storekeeper'), async (c) => {
+    const holders = await sql`
+      SELECT id, display_name, role FROM users
+      WHERE is_active AND role <> 'auditor'
+      ORDER BY display_name`;
+    return c.json({ holders });
+  });
+
   app.patch(
     '/users/:id',
     requireRole('admin'),
