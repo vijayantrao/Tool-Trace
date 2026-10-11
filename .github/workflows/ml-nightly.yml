@@ -36,7 +36,7 @@ jobs:
           fi
       - uses: actions/checkout@v5
         if: steps.config.outputs.configured == 'true'
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.config.outputs.configured == 'true'
         with:
           python-version: '3.13'

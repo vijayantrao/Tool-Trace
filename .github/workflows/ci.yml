@@ -76,7 +76,7 @@ jobs:
         working-directory: ml
     steps:
       - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -113,7 +113,7 @@ jobs:
           cache: npm
       - run: npm ci
       # The journey runs the real nightly ML job against the test database.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -158,7 +158,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.13'
           cache: pip
@@ -186,7 +186,7 @@ jobs:
       - run: sudo apt-get install -y --no-install-recommends libssl-dev
       - name: Host tests (shared signing vectors)
         run: make -C test/host
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
       - uses: actions/cache@v4
