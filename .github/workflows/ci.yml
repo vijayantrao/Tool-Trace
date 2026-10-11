@@ -43,7 +43,7 @@ jobs:
       # Also runs the shared-rate-limit tests against a real Redis.
       REDIS_TEST_URL: redis://localhost:6379
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -75,7 +75,7 @@ jobs:
       run:
         working-directory: ml
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
@@ -106,7 +106,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
       ML_PYTHON: python
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -152,7 +152,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
       ML_PYTHON: python
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: actions/setup-node@v6
         with:
           node-version: 22
@@ -182,7 +182,7 @@ jobs:
       run:
         working-directory: firmware/station
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: sudo apt-get install -y --no-install-recommends libssl-dev
       - name: Host tests (shared signing vectors)
         run: make -C test/host
@@ -202,7 +202,7 @@ jobs:
     name: Docker images - build and CVE scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: docker build -f apps/api/Dockerfile -t tooltrace-api:ci .
       - run: docker build -f apps/web/Dockerfile -t tooltrace-web:ci .
       - run: docker build -f ml/Dockerfile -t tooltrace-ml:ci .
