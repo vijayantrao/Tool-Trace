@@ -45,7 +45,7 @@ jobs:
       - name: Wipe and load demo data and personas
         if: steps.config.outputs.configured == 'true'
         run: scripts/ci/run.sh "Demo reset" npm run demo:reset -w apps/api
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         if: steps.config.outputs.configured == 'true'
         with:
           python-version: '3.13'
