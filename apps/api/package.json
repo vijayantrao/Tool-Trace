@@ -12,6 +12,7 @@
     "migrate": "tsx src/scripts/migrate.ts",
     "bootstrap-admin": "tsx src/scripts/bootstrap-admin.ts",
     "seed:demo": "tsx src/scripts/seed-demo.ts",
+    "demo:reset": "tsx src/scripts/demo-reset.ts",
     "start:dev": "tsx src/index.ts",
     "station": "tsx src/scripts/station-sim.ts"
   },

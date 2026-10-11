@@ -8,7 +8,8 @@
     "build": "next build",
     "start": "next start -p 3000",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "tour": "playwright test -c playwright.tour.config.ts && node tour/encode.mjs"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

@@ -37,7 +37,12 @@ const stationId = args.id;
 const key = Buffer.from(args.key, 'hex');
 const cards: Record<string, string> = { k: 'C0FFEE99', g: '11223344', y: '55667788', r: 'AABBCCDD', n: '04112233445566' };
 
-const client = await mqtt.connectAsync(args.mqtt!, { clientId: `tt-sim-${stationId.slice(0, 8)}` });
+// Broker credentials come from the environment (never flags), so they stay out of shell history.
+const client = await mqtt.connectAsync(args.mqtt!, {
+  clientId: `tt-sim-${stationId.slice(0, 8)}`,
+  username: process.env.MQTT_USERNAME || undefined,
+  password: process.env.MQTT_PASSWORD || undefined,
+});
 await client.subscribeAsync(`${args.prefix}/stations/${stationId}/replies`, { qos: 1 });
 
 let last = 0;

@@ -29,7 +29,7 @@ def seed_history(conn: psycopg.Connection, *, days: int = 365, seed: int = 7, wi
         return {"skipped": True, "reason": "synthetic history is already imported"}
 
     rows = conn.execute(
-        "SELECT id::text, asset_tag, category, requires_calibration, calibration_due_on, status "
+        "SELECT id::text, asset_tag, category, requires_calibration, calibration_due_on, status, rfid_uid "
         "FROM tools ORDER BY asset_tag"
     ).fetchall()
     if not rows:
@@ -42,6 +42,7 @@ def seed_history(conn: psycopg.Connection, *, days: int = 365, seed: int = 7, wi
             "requires_calibration": r[3],
             "calibration_due_on": r[4],
             "status": r[5],
+            "rfid_uid": r[6],
         }
         for r in rows
     ]
@@ -85,10 +86,12 @@ def seed_history(conn: psycopg.Connection, *, days: int = 365, seed: int = 7, wi
         opened = []
         if with_open:
             # A few tools out right now, so the Insights page has something to show in a demo.
+            # Tools with RFID tags stay in the crib, free for the demo station's cards.
             free = [
                 t
                 for t in tools
                 if t["status"] == "available"
+                and not t["rfid_uid"]
                 and not (t["requires_calibration"] and t["calibration_due_on"] and t["calibration_due_on"] < now.date())
             ]
             plans = [  # (person index, started hours ago, due in hours: negative = overdue)

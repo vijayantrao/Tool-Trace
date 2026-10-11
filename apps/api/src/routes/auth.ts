@@ -13,6 +13,7 @@ import { isoBase64URL } from '@simplewebauthn/server/helpers';
 import { z } from 'zod';
 import type { Config } from '../config.js';
 import type { Sql } from '../db.js';
+import { PERSONA_NAMES, personaEmail } from '../demo/demo.js';
 import { hashToken } from '../lib/crypto.js';
 import { AUDIT_LOCK_ID, auditEvent, clientIp } from '../middleware/db.js';
 import { ApiError, badRequest, conflict } from '../lib/errors.js';
@@ -278,6 +279,23 @@ export function authRoutes({ sql, config, limiter }: Deps) {
 
     const [user] = await sql`SELECT id, email, display_name, role FROM users WHERE id = ${cred.userId}`;
     return c.json({ user });
+  });
+
+  // --- Public demo only: one-click personas ---------------------------------
+  // Exists only when DEMO_MODE is on, which the API allows only on a database marked as a demo.
+  app.post('/demo', validate('json', z.object({ persona: z.enum(PERSONA_NAMES) })), async (c) => {
+    if (!config.DEMO_MODE) throw new ApiError(404, 'not_found', 'Route not found');
+    const { persona } = c.req.valid('json');
+    const [user] = await sql<{ id: string; isActive: boolean }[]>`
+      SELECT id, is_active FROM users WHERE email = ${personaEmail(persona)}`;
+    if (!user?.isActive) throw new ApiError(503, 'demo_not_ready', 'The demo is being reset. Try again in a minute.');
+    await sql.begin(async (tx) => {
+      await tx`SELECT pg_advisory_xact_lock(${AUDIT_LOCK_ID})`;
+      await tx`SELECT set_config('tooltrace.ip', ${clientIp(c, config.TRUST_PROXY)}, true)`;
+      await createSession(tx, config, c, user.id);
+    });
+    const [me] = await sql`SELECT id, email, display_name, role FROM users WHERE id = ${user.id}`;
+    return c.json({ user: me });
   });
 
   // --- Session --------------------------------------------------------------

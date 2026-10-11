@@ -8,8 +8,12 @@
 import type { NextRequest } from 'next/server';
 
 export const dynamic = 'force-dynamic';
+// Live event streams run as long as the host allows (5 minutes on Vercel Hobby); the browser then reconnects.
+export const maxDuration = 300;
 
 const API_URL = (process.env.API_URL ?? 'http://localhost:8080').replace(/\/$/, '');
+// Shared with the API (its PROXY_SECRET): proves a request came through this proxy.
+const PROXY_SECRET = process.env.API_PROXY_SECRET;
 
 // Only these request headers are forwarded. Everything else is dropped.
 const FORWARD_REQUEST = ['cookie', 'content-type', 'origin', 'user-agent', 'sec-fetch-site', 'accept', 'idempotency-key'];
@@ -38,6 +42,7 @@ async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }
   }
   const clientIp = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim();
   if (clientIp) headers.set('x-forwarded-for', clientIp);
+  if (PROXY_SECRET) headers.set('x-tooltrace-proxy', PROXY_SECRET);
 
   let upstream: Response;
   try {

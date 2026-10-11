@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { ApiError, conflict, forbidden, notFound } from '../lib/errors.js';
+import { isPersonaEmail } from '../demo/demo.js';
 import { normalizeUid } from '../lib/uid.js';
 import { validate } from '../lib/validate.js';
 import { db } from '../middleware/db.js';
@@ -51,6 +52,13 @@ export function userRoutes({ config }: Deps) {
       // Prevents an admin from accidentally locking themselves out. (Assigning your own badge is fine.)
       if (id === me.id && (body.role !== undefined || body.isActive !== undefined)) {
         throw forbidden('You cannot change your own role or status');
+      }
+      if (config.DEMO_MODE) {
+        // Everyone shares the demo personas: one visitor mustn't lock the others out.
+        const [target] = await db(c)<{ email: string }[]>`SELECT email FROM users WHERE id = ${id}`;
+        if (target && isPersonaEmail(target.email)) {
+          throw new ApiError(403, 'demo_protected', 'The demo accounts can’t be changed. Invite someone new to try this.');
+        }
       }
       let badge: string | null | undefined = undefined;
       if (body.badgeUid !== undefined) {

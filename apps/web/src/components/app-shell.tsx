@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { DemoBanner } from '@/components/demo-banner';
 import { OfflineBanner } from '@/components/offline-banner';
 import { api } from '@/lib/api';
 import { useOffline } from '@/lib/offline';
@@ -143,6 +144,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-4 pb-32 pt-6 md:px-10 md:pb-16 md:pt-10">
+        <DemoBanner />
         <OfflineBanner />
         {children}
       </main>

@@ -2,7 +2,7 @@
 
 This document uses **STRIDE** (Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege) to walk through what could go wrong in ToolTrace, what stops it, and where the code and tests for each defense live. It ends with the risks that remain, stated plainly.
 
-Last reviewed: Phase 5 (intelligence and offline sync).
+Last reviewed: Phase 6 (launch: free-tier deployment and the public demo).
 
 ## 1. What we protect
 
@@ -86,6 +86,7 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Forged station message | HMAC-SHA256 with a per-station key derived by HKDF from a master key | `stations/crypto.ts`, `stations/gateway.ts` | `stations.test.ts` (forged, altered, wrong key), shared vectors in C++ |
 | Fake reply shown on a station screen | Replies are signed and must answer the station's own last sequence | `firmware/station/src/station_core.h` | `test_core.cpp` |
 | Station pretends to be another station | Key is derived from the station's id; RLS lets a station update only its own row | `003_hardening.sql` policies `stations_update`, `station_events_insert` | `security.test.ts` "a station can only touch its own row and log only its own events" |
+| Someone signs in to the public demo's shared accounts | Intended: demo mode offers one-click personas. It is refused on any database not marked as a demo, and a database with real accounts can't be marked, so passwordless sign-in can never reach real data | `demo.test.ts` "refuses to turn a database with real accounts into a demo", "is off unless switched on" |
 | Technician records an action as someone else | RLS: a technician may only insert check-outs where holder = issuer = themselves | policy `checkouts_insert` | `security.test.ts` "a technician cannot pretend someone else issued the tool" |
 
 ### T: Tampering (changing data you shouldn't)
@@ -103,6 +104,8 @@ Each row names the defense, where it is implemented, and the test that proves it
 | A superuser rewrites the **entire** chain consistently | **Anchors**: the verify screen shows `id:hash` of the head; saved outside ToolTrace, it later proves the chain still contains that exact entry | `routes/audit.ts`, `/audit` page | `security.test.ts` "spots a rewritten chain, given an anchor recorded earlier", e2e audit test |
 | Gaps in the chain from concurrent writers | `audit_append()` takes a transaction-level advisory lock; ids are gapless and in commit order | `audit_append()` | `security.test.ts` "verifies as intact, with gapless ids, after many concurrent writes" |
 | Malicious dependency or leaked secret in git | Dependabot (npm, pip, Actions, Docker), `npm audit` (high), gitleaks over full history, CodeQL, Grype image scan | `.github/workflows/*` | CI |
+| A demo visitor vandalises the shared accounts (deactivates the storekeeper) | Demo personas can't be changed (403 `demo_protected`); everything else is wiped every night | `demo.test.ts` "protects the shared personas" |
+| The demo reset is abused to wipe a real audit trail | The reset refuses unless the database is a marked demo database; within it, it is the first entry of the new chain (`demo.reset`). Outside the reset, TRUNCATE is still refused | `demo.test.ts` "only resets the audit log through the reset" |
 | An offline action is applied twice (flaky network retries, two open tabs) | **Idempotency keys**: the key row is inserted first, in the same transaction as the action, so a duplicate waits for the original and gets its stored answer | `middleware/idempotency.ts` | `intelligence.test.ts` "simultaneous duplicates… still happen once" |
 | A key is reused to smuggle in a different action | Each key is bound to a SHA-256 of method, path and body; a mismatch is refused (422). Keys are per person and expire after 7 days | `middleware/idempotency.ts` | "refuses to reuse a key for a different request", "keys belong to one person" |
 | A phone claims a false time for an offline check-out | Server time stays authoritative (`checked_out_at`). The phone's time is stored separately and bounded (not in the future, at most 24 h old) in the API **and** by a database CHECK | `routes/checkouts.ts`, `004_intelligence.sql` | "records when an offline check-out really happened, within limits" |
@@ -142,6 +145,7 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Threat | Defense |
 |---|---|
 | Sign-in brute force or flooding | Per-IP limit on `/api/auth/*` (default 30/min) |
+| The deployed API is called directly, bypassing the web app (and faking `X-Forwarded-For` to dodge per-IP limits) | With `PROXY_SECRET` set, `/api` answers only requests carrying the proxy's secret (constant-time compare). Vercel overwrites `X-Forwarded-For` with the real client IP, and only the proxy can reach the API, so the recorded IP is trustworthy | `demo.test.ts` "refuses direct calls…" |
 | A signed-in account (or stolen session) hammers the API | Per-user limit across all routes (default 300/min) |
 | Limits reset by restarting or bypassed by hitting another replica | Counters in **Redis** (atomic Lua script), shared by all API instances |
 | Redis outage takes the crib offline | The limiter **fails open** with a throttled warning (see residual risks) |
@@ -177,13 +181,15 @@ Being honest about these is part of the design.
 10. **Lost passkey device.** An admin re-invites the person; there's no self-service recovery, by design.
 11. **The offline outbox is stored unencrypted on the phone** (IndexedDB: asset tags, due times, the person's id; the last signed-in person's id and name in localStorage for the offline page). No tokens or passwords are stored, and signing out clears it, but anyone holding an unlocked phone can read it.
 12. **The nightly job's secret is an owner-level connection string** in GitHub Actions secrets. The job drops to `tooltrace_ml` immediately, but a leaked secret is owner access. Production should use a dedicated login role that is a member of `tooltrace_ml` only.
-13. **Model risks** (synthetic training data, feedback loops, fairness, data poisoning by people shaping their own history) are covered in the [model card](ML.md). Mitigations: staff-only, explained, audited, never automatic.
+13. **The public demo runs on free hosting**: the API sleeps when idle, and live event streams through the Vercel proxy end after 5 minutes (the browser reconnects automatically). Fine for a demo; a real deployment should use always-on hosting.
+14. **Model risks** (synthetic training data, feedback loops, fairness, data poisoning by people shaping their own history) are covered in the [model card](ML.md). Mitigations: staff-only, explained, audited, never automatic.
 
 ## 5. How this is verified continuously
 
 | Check | Where | Runs |
 |---|---|---|
-| 128 API integration tests (27 Phase 4 security tests, 14 for insights, reviews and idempotent replays) | `apps/api/test` | Every push |
+| 140 API integration tests (27 Phase 4 security tests, 14 for insights, reviews and idempotent replays, 12 for demo mode and the proxy gate) | `apps/api/test` | Every push |
+| The recorded product tour, run against a demo-mode stack behind the proxy secret | `apps/web/tour` | Every push |
 | 30 Python tests: no-leakage features, near-oracle accuracy, anomaly recall, and the ML role's privileges on a real PostgreSQL | `ml/tests` | Every push |
 | 23 browser tests with real passkeys and axe accessibility scans, including offline check-outs and the nightly model | `apps/web/e2e` | Every push |
 | 58 firmware checks against shared signing vectors | `firmware/station/test/host` | Every push |

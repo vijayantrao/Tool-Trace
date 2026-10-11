@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { secureHeaders } from 'hono/secure-headers';
@@ -57,6 +58,19 @@ export function createApp(
   );
   app.use('*', originGuard(config.RP_ORIGINS));
 
+  // Deployed behind the web app's proxy: refuse direct calls from the internet. This also makes
+  // the client IP in X-Forwarded-For trustworthy (only the proxy can set it).
+  if (config.PROXY_SECRET) {
+    const expected = Buffer.from(config.PROXY_SECRET);
+    app.use('/api/*', async (c, next) => {
+      const got = Buffer.from(c.req.header('x-tooltrace-proxy') ?? '');
+      if (got.length !== expected.length || !timingSafeEqual(got, expected)) {
+        return errorResponse(c, new ApiError(403, 'direct_access_forbidden', 'Use the ToolTrace web app.'));
+      }
+      await next();
+    });
+  }
+
   app.get('/healthz', async (c) => {
     await sql`SELECT 1`;
     return c.json({ status: 'ok' });
@@ -78,7 +92,11 @@ export function createApp(
   // row-level security and the audit trail seeing who is acting. Sign-in
   // (no identity yet) and the long-lived event stream are the exceptions.
   const inTransaction = requestTransaction(sql, config.TRUST_PROXY);
-  const outsideTransactions = (path: string) => path.startsWith('/api/auth/') || path === '/api/events';
+  // Public facts the sign-in page needs before anyone is signed in (and a cheap way to wake a sleeping server).
+  api.get('/meta', (c) => c.json({ name: config.RP_NAME, demo: config.DEMO_MODE }));
+
+  const outsideTransactions = (path: string) =>
+    path.startsWith('/api/auth/') || path === '/api/events' || path === '/api/meta';
   api.use('*', (c, next) => (outsideTransactions(c.req.path) ? next() : inTransaction(c, next)));
   // Offline replays: an action sent again with the same Idempotency-Key happens only once.
   const once = idempotency();

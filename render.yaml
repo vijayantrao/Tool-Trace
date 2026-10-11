@@ -1,0 +1,47 @@
+# Render Blueprint for the ToolTrace API (free plan). The web app goes on Vercel,
+# the database on Neon and rate-limit counters on Upstash: see docs/DEPLOY.md.
+services:
+  - type: web
+    name: tooltrace-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    # Deploy only commits whose GitHub checks (tests, security scans) have passed.
+    autoDeployTrigger: checksPass
+    buildFilter:
+      paths:
+        - apps/api/**
+        - db/migrations/**
+        - package.json
+        - package-lock.json
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL # Neon, the direct (non-pooled) connection string
+        sync: false
+      - key: APP_URL # https://<your-vercel-project>.vercel.app
+        sync: false
+      - key: RP_ID # <your-vercel-project>.vercel.app
+        sync: false
+      - key: RP_ORIGINS # https://<your-vercel-project>.vercel.app
+        sync: false
+      - key: REDIS_URL # Upstash, rediss://...
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TRUST_PROXY
+        value: "true"
+      # Copy this generated value into Vercel as API_PROXY_SECRET.
+      - key: PROXY_SECRET
+        generateValue: true
+      - key: STATION_MASTER_KEY
+        generateValue: true
+      # The public demo: one-click personas on a database that only ever holds fictional data.
+      # Remove for a real deployment.
+      - key: DEMO_MODE
+        value: "true"
+      - key: SESSION_TTL_HOURS
+        value: "8"

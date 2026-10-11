@@ -27,6 +27,16 @@ const schema = z.object({
   API_RATE_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(300),
   /** Shared rate-limit counters, e.g. rediss://default:pass@xyz.upstash.io:6379. In memory if unset. */
   REDIS_URL: z.string().optional(),
+  /**
+   * If set, /api only answers requests that carry this secret in X-ToolTrace-Proxy: the
+   * web app's proxy adds it, so the API can't be called directly from the internet.
+   */
+  PROXY_SECRET: z.string().min(32).optional(),
+  /**
+   * Public demo: one-click personas that sign in without a passkey. Only allowed on a
+   * database marked as a demo database (see src/demo/demo.ts). Never on real data.
+   */
+  DEMO_MODE: bool.default(false),
 
   // --- Smart tool stations (optional) ---------------------------------------
   /** Secret from which every station's signing key is derived. 32+ random bytes, hex or base64. */

@@ -3,6 +3,7 @@ import type { MqttClient } from 'mqtt';
 import { createApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createDb } from './db.js';
+import { isDemoDatabase, resetDemo } from './demo/demo.js';
 import { createLimiterStore } from './lib/rate-limit.js';
 import { FloorEvents } from './stations/floor-events.js';
 import { StationGateway } from './stations/gateway.js';
@@ -10,6 +11,19 @@ import { connectGateway, startDevBroker } from './stations/mqtt.js';
 
 const config = loadConfig();
 const sql = createDb(config.DATABASE_URL);
+
+// Demo mode signs people in without a passkey, so it only ever runs on a demo database.
+// An empty database becomes one automatically (resetDemo refuses if it holds real accounts).
+if (config.DEMO_MODE && !(await isDemoDatabase(sql))) {
+  try {
+    await resetDemo(sql);
+    console.log('[demo] this empty database is now the public demo database');
+  } catch (err) {
+    console.error(`[demo] DEMO_MODE refused: ${(err as Error).message}`);
+    process.exit(1);
+  }
+}
+if (config.DEMO_MODE) console.warn('[demo] DEMO MODE: one-click personas are enabled. Never use this with real data.');
 const events = await new FloorEvents(sql).start();
 const gateway = new StationGateway(sql, config);
 const limiter = await createLimiterStore(config.REDIS_URL);

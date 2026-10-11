@@ -14,7 +14,13 @@ On a real shop floor, tools go missing, get used past their calibration date, an
 - **It sees trouble coming.** A nightly Python model flags tools likely to come back late or go missing, and odd check-outs, with the reasons, for a person to act on.
 - **No signal on the shop floor? Keep working.** Check-outs made offline sync when the signal returns, exactly once.
 
-> Status: **Phase 5 of 6 complete** (secure backend, web app, IoT stations, hardening, intelligence). See the [roadmap](#roadmap).
+> Status: **all 6 phases complete**. Deployable for free in about 30 minutes: see [Deploy your own](#deploy-your-own-free).
+
+## See it in 75 seconds
+
+![A badge and a tool tapped at the station: the board updates live](docs/demo/live-update.gif)
+
+**[Watch the full tour (MP4, 76 s)](docs/demo/tooltrace-tour.mp4)**: demo sign-in, the shadow board, calibration lockout, setting up a station, a live update, a forged message rejected, the nightly model's insights, and the audit trail verified. The video is recorded by a script against the real app ([`apps/web/tour`](apps/web/tour)), and CI records it again on every push, so it can't fall out of date.
 
 ## The tool board
 
@@ -164,6 +170,8 @@ Everything shown is built. Phase 6 deploys it to the free tiers named in bracket
 | Leaked secrets, vulnerable code or images | gitleaks over the full git history, CodeQL (TypeScript, Python, C++), OWASP ZAP against the running stack, Grype CVE scan of all three images |
 | Offline actions applied twice, or replayed as something else | Idempotency keys inserted first in the action's own transaction, bound to a hash of the request, per person |
 | Model scores about people seen by the wrong people | Staff-only by row-level security. The ML job's own role can't read names, emails or notes |
+| Someone calls the deployed API directly, or fakes their IP | The API answers only requests carrying the web proxy's shared secret (constant-time compare); health checks excepted |
+| The demo's passwordless sign-in reaches real data | Demo mode refuses to run on any database not marked as a demo, and a database with real accounts can't be marked |
 | SQL injection | Every query uses bound parameters (postgres.js tagged templates). No string-built SQL |
 | Bugs that bypass the API | Calibration lockout and the one-checkout-per-tool rule are enforced **inside PostgreSQL** (trigger and partial unique index) |
 | Information leaks | Strict security headers (CSP `default-src 'none'`, HSTS, nosniff, no-referrer), `Cache-Control: no-store`, 64 KB body limit, generic error messages |
@@ -218,6 +226,18 @@ All routes live under `/api` and return JSON. Errors always look like `{ "error"
 
 Any `POST`, `PATCH` or `DELETE` may carry an `Idempotency-Key: <uuid>` header. Sending it again returns the first answer (with `Idempotent-Replayed: true`) without doing anything twice. `POST /checkouts` also accepts `queuedAt` for check-outs made offline.
 
+## Deploy your own (free)
+
+The whole system runs on free tiers: **Vercel** (web), **Render** (API, Docker), **Neon** (Postgres), **Upstash** (Redis), **GitHub Actions** (nightly model and demo reset), and optionally **EMQX Serverless** (MQTT for stations). [`render.yaml`](render.yaml) describes the API; **[docs/DEPLOY.md](docs/DEPLOY.md)** walks through every click.
+
+The public demo has **one-click demo roles** (Admin, Storekeeper, Technician, Auditor) with fictional data that resets every night. That is safe by construction:
+
+- Demo mode only runs on a database that has been **marked as a demo database**, and a database can only be marked while it holds no real accounts. On a real database the API refuses to start in demo mode.
+- The shared demo accounts can't be deactivated or changed, so one visitor can't lock out the rest.
+- The nightly reset is the only thing allowed to clear the audit trail, and it is the first entry of the new chain.
+
+In production, the API answers only requests carrying a **shared secret that only the web app's proxy knows**. Called directly from the internet it refuses, so the client IP it records can't be faked. On free hosting the API sleeps when idle; the sign-in page says "Waking up the server" instead of looking broken.
+
 ## Run it locally
 
 **One click on Windows:** double-click `scripts/windows/run-app.cmd` (needs Git, Node.js 22+ and Docker Desktop). It starts the database, loads demo tools, starts the API (with smart stations and a built-in MQTT broker) and the web app, and opens your first admin invite. Create your passkey with Windows Hello, and you're in. To try a station, add one on the Stations page and run the command it shows.
@@ -262,7 +282,7 @@ The bootstrap script prints a one-time admin invite link. It refuses to run once
 ## Tests
 
 ```bash
-# API: 128 tests. Needs a Postgres server; each test file creates and drops its own database.
+# API: 140 tests. Needs a Postgres server; each test file creates and drops its own database.
 # Add REDIS_TEST_URL=redis://localhost:6379 to also test shared rate limits on a real Redis.
 TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm test
 
@@ -274,6 +294,9 @@ TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres pyt
 # Runs the real ML job, so it needs the ML requirements installed (ML_PYTHON picks the interpreter).
 npm run build -w apps/web
 E2E_DATABASE_URL=postgres://postgres:postgres@localhost:5432/tooltrace_e2e npm run test:e2e
+
+# The demo video: records the tour against a demo-mode stack, then encodes it (needs ffmpeg)
+npm run tour -w apps/web       # -> docs/demo/tooltrace-tour.mp4 and docs/demo/live-update.gif
 
 # Station firmware core: 58 C++ checks (needs g++ and OpenSSL headers)
 make -C firmware/station/test/host
@@ -297,6 +320,7 @@ apps/api/
   src/stations/         MQTT gateway, HKDF + HMAC signing, Postgres NOTIFY event hub
   src/services/         check-out and return rules shared by the web and stations
   src/middleware/       sessions + roles, CSRF origin guard, request transactions as the least-privileged role
+  src/demo/             public demo: data, one-click personas, guarded nightly reset
   test/                 integration tests and a software passkey authenticator
 apps/web/
   src/app/(app)/        board, tools, tool detail, scan, checkouts, QR labels, people, stations, audit trail, insights
@@ -305,12 +329,16 @@ apps/web/
   src/app/api/          same-origin proxy to the API
   src/components/       shadow-board slot, calibration sticker, hang tag, QR scanner
   e2e/                  Playwright journeys with virtual passkeys and axe checks
+  tour/                 the scripted, captioned product tour that records the demo video
 ml/tooltrace_ml/        nightly job: synthetic history, features, models, anomalies, explanations
 ml/tests/               no-leakage, accuracy-vs-oracle and database privilege tests
 firmware/station/       ESP32 C++ firmware, host tests, shared vectors, Wokwi project
 db/migrations/          plain SQL, applied in order under an advisory lock (003: RLS, audit chain; 004: ML results, idempotency)
 docs/THREAT_MODEL.md    STRIDE threat model
 docs/ML.md              model card: data, features, evaluation, limitations
+docs/DEPLOY.md          free deployment, click by click
+docs/demo/              the recorded tour (MP4) and the README GIF
+render.yaml             Render Blueprint for the API
 scripts/windows/        one-click launch and test scripts
 .github/                CI and security workflows, Dependabot
 ```
@@ -322,7 +350,7 @@ scripts/windows/        one-click launch and test scripts
 - [x] **Phase 3: IoT.** ESP32 + RFID smart station (C++), signed MQTT over TLS, live floor updates, badges and tool tags, Wokwi simulation
 - [x] **Phase 4: Hardening.** Hash-chained tamper-evident audit log, Redis rate limiting, Postgres row-level security, CodeQL, gitleaks, OWASP ZAP, STRIDE threat model
 - [x] **Phase 5: Intelligence.** Python ML for late-return and loss risk, anomaly detection, offline sync
-- [ ] **Phase 6: Launch.** Free-tier deployment, demo accounts, demo video
+- [x] **Phase 6: Launch.** Free-tier deployment, demo accounts, demo video
 
 ---
 
