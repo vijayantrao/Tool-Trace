@@ -28,8 +28,8 @@ services:
         sync: false
       - key: RP_ORIGINS # https://<your-vercel-project>.vercel.app
         sync: false
-      - key: REDIS_URL # Upstash, rediss://...
-        sync: false
+      # Optional: REDIS_URL (Upstash, rediss://...) shares rate-limit counters between several
+      # API instances. The free plan runs one instance, so in-memory counters are enough.
       - key: COOKIE_SECURE
         value: "true"
       - key: TRUST_PROXY

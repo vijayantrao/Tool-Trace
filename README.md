@@ -14,7 +14,7 @@ On a real shop floor, tools go missing, get used past their calibration date, an
 - **It sees trouble coming.** A nightly Python model flags tools likely to come back late or go missing, and odd check-outs, with the reasons, for a person to act on.
 - **No signal on the shop floor? Keep working.** Check-outs made offline sync when the signal returns, exactly once.
 
-> Status: **all 6 phases complete**. Deployable for free in about 30 minutes: see [Deploy your own](#deploy-your-own-free).
+> Status: **all 6 phases complete**. Deployable for free in about 20 minutes: see [Deploy your own](#deploy-your-own-free).
 
 ## See it in 75 seconds
 
@@ -228,7 +228,7 @@ Any `POST`, `PATCH` or `DELETE` may carry an `Idempotency-Key: <uuid>` header. S
 
 ## Deploy your own (free)
 
-The whole system runs on free tiers: **Vercel** (web), **Render** (API, Docker), **Neon** (Postgres), **Upstash** (Redis), **GitHub Actions** (nightly model and demo reset), and optionally **EMQX Serverless** (MQTT for stations). [`render.yaml`](render.yaml) describes the API; **[docs/DEPLOY.md](docs/DEPLOY.md)** walks through every click.
+The whole system runs on free tiers: **Vercel** (web), **Render** (API, Docker), **Neon** (Postgres), **GitHub Actions** (nightly model and demo reset), and optionally **Upstash** (Redis, for several API instances) and **EMQX Serverless** (MQTT for stations). [`render.yaml`](render.yaml) describes the API; **[docs/DEPLOY.md](docs/DEPLOY.md)** walks through every click.
 
 The public demo has **one-click demo roles** (Admin, Storekeeper, Technician, Auditor) with fictional data that resets every night. That is safe by construction:
 

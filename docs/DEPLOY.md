@@ -1,13 +1,13 @@
 # Deploy ToolTrace for free
 
-The public demo runs entirely on free tiers, with no credit card for the core pieces. Total time: about 30 minutes, most of it waiting for builds.
+The public demo runs entirely on free tiers, with no credit card for the core pieces. Total time: about 20 minutes, most of it waiting for builds.
 
 | Piece | Host (free tier) | Notes |
 |---|---|---|
 | Web app (Next.js) | **Vercel** Hobby | Also proxies `/api` to the API, so cookies stay first-party |
 | API (TypeScript, Docker) | **Render** free web service | Sleeps after 15 minutes idle and takes about a minute to wake. The sign-in page says so. |
 | Database | **Neon** Postgres free | 1 GB, sleeps after 5 minutes idle |
-| Rate-limit counters | **Upstash** Redis free | 500K commands a month |
+| Rate-limit counters (optional) | **Upstash** Redis free | Only needed with more than one API instance |
 | Nightly model and demo reset | **GitHub Actions** | Free for public repositories |
 | Smart stations (optional) | **EMQX Serverless** free MQTT | Only if you want to connect an ESP32 or the terminal simulator |
 
@@ -24,13 +24,7 @@ Free tiers change. These were checked in October 2026.
 3. On the project dashboard, click **Connect**. **Turn connection pooling off**: ToolTrace uses `LISTEN/NOTIFY` for live updates, which needs a direct connection.
 4. Copy the connection string. It looks like `postgresql://neondb_owner:...@ep-xxxx.ap-southeast-1.aws.neon.tech/neondb?sslmode=require` (no `-pooler` in the host). Call it **DATABASE_URL**.
 
-## 2. Rate limits: Upstash Redis
-
-1. Sign up at [upstash.com](https://upstash.com).
-2. **Create Database** → Redis, name `tooltrace`, region **ap-southeast-1 (Singapore)**, TLS on.
-3. On the database page, copy the Redis URL that starts with `rediss://`. Call it **REDIS_URL**.
-
-## 3. Load the demo data (GitHub Actions)
+## 2. Load the demo data (GitHub Actions)
 
 1. On GitHub, open the repository → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**.
 2. Name `DEMO_DATABASE_URL`, value: the Neon **DATABASE_URL**. Save.
@@ -38,7 +32,7 @@ Free tiers change. These were checked in October 2026.
 
 From now on it runs every night at 02:01 India time. It refuses to touch a database that holds real accounts.
 
-## 4. API: Render
+## 3. API: Render
 
 1. Sign up at [render.com](https://render.com) with GitHub, and allow access to this repository.
 2. **New** → **Blueprint** → choose this repository. Render reads [`render.yaml`](../render.yaml) and proposes one free web service, `tooltrace-api`, in Singapore.
@@ -50,7 +44,6 @@ From now on it runs every night at 02:01 India time. It refuses to touch a datab
    | `APP_URL` | `https://YOUR-NAME.vercel.app` |
    | `RP_ID` | `YOUR-NAME.vercel.app` (no `https://`) |
    | `RP_ORIGINS` | `https://YOUR-NAME.vercel.app` |
-   | `REDIS_URL` | the Upstash `rediss://` URL from step 2 |
 
    `PROXY_SECRET` and `STATION_MASTER_KEY` are generated for you.
 4. **Apply**. The first build takes about five minutes. When it says **Live**, note the service URL, for example `https://tooltrace-api.onrender.com`. Call it **API_URL**.
@@ -58,7 +51,7 @@ From now on it runs every night at 02:01 India time. It refuses to touch a datab
 
 Check: opening `API_URL/healthz` shows `{"status":"ok"}`, and `API_URL/api/meta` answers **403 direct_access_forbidden**. That 403 is correct: the API only talks to your web app.
 
-## 5. Web app: Vercel
+## 4. Web app: Vercel
 
 1. Sign up at [vercel.com](https://vercel.com) with GitHub.
 2. **Add New** → **Project** → import this repository.
@@ -67,12 +60,12 @@ Check: opening `API_URL/healthz` shows `{"status":"ok"}`, and `API_URL/api/meta`
 
    | Key | Value |
    |---|---|
-   | `API_URL` | the Render URL from step 4 |
-   | `API_PROXY_SECRET` | the `PROXY_SECRET` value from step 4 |
+   | `API_URL` | the Render URL from step 3 |
+   | `API_PROXY_SECRET` | the `PROXY_SECRET` value from step 3 |
 
 5. **Deploy**. When it finishes, open `https://YOUR-NAME.vercel.app`.
 
-## 6. Try it
+## 5. Try it
 
 1. The first visit after a quiet spell shows **Waking up the server** for about a minute. That's the free API starting.
 2. Under **Try the demo**, pick a role: Admin, Storekeeper, Technician or Auditor.
@@ -82,12 +75,20 @@ Check: opening `API_URL/healthz` shows `{"status":"ok"}`, and `API_URL/api/meta`
 
 | Symptom | Fix |
 |---|---|
-| Sign-in page keeps saying "Waking up" for several minutes | Render dashboard → the service → **Logs**. Usually a mistyped `DATABASE_URL` or `REDIS_URL`. |
+| Sign-in page keeps saying "Waking up" for several minutes | Render dashboard → the service → **Logs**. Usually a mistyped `DATABASE_URL`. |
 | "The ToolTrace server is not reachable" | `API_URL` in Vercel is wrong. Fix it, then Vercel → Deployments → **Redeploy**. |
 | Every request answers "Use the ToolTrace web app" | `API_PROXY_SECRET` (Vercel) and `PROXY_SECRET` (Render) differ. |
 | Passkey errors | `RP_ID` / `RP_ORIGINS` must exactly match the Vercel address. Fix them on Render; it redeploys. |
 | "Request blocked" on actions | The page's address isn't in `RP_ORIGINS`. Use the main `YOUR-NAME.vercel.app` address, not a preview URL. |
-| Demo personas missing | Run **Demo reset** again (step 3). |
+| Demo personas missing | Run **Demo reset** again (step 2). |
+
+## 6. Optional: shared rate limits (Upstash Redis)
+
+1. Sign up at [upstash.com](https://upstash.com).
+2. **Create Database** → Redis, name `tooltrace`, region **ap-southeast-1 (Singapore)**, TLS on.
+3. On the database page, copy the Redis URL that starts with `rediss://`. Call it **REDIS_URL**.
+
+On Render, add `REDIS_URL` with that value. Worth it once you run more than one API instance.
 
 ## 7. Optional: smart stations over MQTT (EMQX Serverless)
 
