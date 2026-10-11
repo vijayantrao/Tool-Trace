@@ -5,6 +5,7 @@ import { useEffect, type ReactNode } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { Spinner } from '@/components/ui';
 import { LiveFloorProvider } from '@/lib/live';
+import { OfflineProvider } from '@/lib/offline';
 import { useMe } from '@/lib/session';
 
 export default function SignedInLayout({ children }: { children: ReactNode }) {
@@ -40,7 +41,9 @@ export default function SignedInLayout({ children }: { children: ReactNode }) {
   }
   return (
     <LiveFloorProvider meId={me.id}>
-      <AppShell me={me}>{children}</AppShell>
+      <OfflineProvider me={me}>
+        <AppShell me={me}>{children}</AppShell>
+      </OfflineProvider>
     </LiveFloorProvider>
   );
 }

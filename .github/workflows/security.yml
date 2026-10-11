@@ -32,6 +32,8 @@ jobs:
             build-mode: none
           - language: c-cpp
             build-mode: manual
+          - language: python
+            build-mode: none
     steps:
       - uses: actions/checkout@v5
       - uses: github/codeql-action/init@v4

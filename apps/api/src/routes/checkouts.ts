@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { conflict, forbidden, unauthorized } from '../lib/errors.js';
+import { badRequest, conflict, forbidden, unauthorized } from '../lib/errors.js';
 import { checkOutTool, returnCheckout } from '../services/floor.js';
 import { validate } from '../lib/validate.js';
 import { db } from '../middleware/db.js';
@@ -8,6 +8,8 @@ import { currentUser, requireAuth, requireRole } from '../middleware/session.js'
 import type { AppEnv, Deps } from '../types.js';
 
 const MAX_CHECKOUT_DAYS = 30;
+/** Offline actions older than this are refused (the database enforces the same bound). */
+const MAX_OFFLINE_HOURS = 24;
 
 export function checkoutRoutes(_deps: Deps) {
   const app = new Hono<AppEnv>();
@@ -57,6 +59,8 @@ export function checkoutRoutes(_deps: Deps) {
           assetTag: z.string().trim().max(32).optional(),
           holderId: z.uuid().optional(),
           dueBackAt: z.iso.datetime({ offset: true }),
+          // When the person really did this, on a phone that was offline at the time.
+          queuedAt: z.iso.datetime({ offset: true }).optional(),
         })
         .refine((v) => Boolean(v.toolId) !== Boolean(v.assetTag), 'Provide exactly one of toolId or assetTag'),
     ),
@@ -73,12 +77,17 @@ export function checkoutRoutes(_deps: Deps) {
       if (due.getTime() > now + MAX_CHECKOUT_DAYS * 86_400_000) {
         throw conflict('invalid_due_date', `Checkouts can last at most ${MAX_CHECKOUT_DAYS} days`);
       }
+      const queuedAt = b.queuedAt ? new Date(b.queuedAt) : undefined;
+      if (queuedAt && (queuedAt.getTime() > now + 2 * 60_000 || queuedAt.getTime() < now - MAX_OFFLINE_HOURS * 3_600_000)) {
+        throw badRequest('invalid_queued_at', `Offline actions must be synced within ${MAX_OFFLINE_HOURS} hours`);
+      }
 
       const checkout = await checkOutTool(db(c), {
         tool: b.toolId ? { id: b.toolId } : { assetTag: b.assetTag! },
         holderId,
         issuedBy: user.id,
         dueBackAt: due,
+        offlineQueuedAt: queuedAt,
       });
       return c.json({ checkout }, 201);
     },

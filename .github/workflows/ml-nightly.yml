@@ -1,0 +1,50 @@
+name: ML nightly
+
+# The nightly job: learn from the day's returns, score what's out, flag what's odd.
+# Needs the repository secret ML_DATABASE_URL (a connection string for the production
+# database; the job switches to the least-privileged tooltrace_ml role itself).
+# Without it, the workflow does nothing.
+
+on:
+  schedule:
+    - cron: '17 21 * * *' # 02:47 in India (IST), after the night shift's returns
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ml-nightly
+  cancel-in-progress: false
+
+jobs:
+  run:
+    name: Train, score and flag
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      DATABASE_URL: ${{ secrets.ML_DATABASE_URL }}
+    steps:
+      - name: Check configuration
+        id: config
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice title=ML nightly::ML_DATABASE_URL is not set, so there is nothing to score. Skipping."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/checkout@v5
+        if: steps.config.outputs.configured == 'true'
+      - uses: actions/setup-python@v5
+        if: steps.config.outputs.configured == 'true'
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: ml/requirements.txt
+      - if: steps.config.outputs.configured == 'true'
+        run: pip install -r ml/requirements.txt
+      - name: Run the job
+        if: steps.config.outputs.configured == 'true'
+        working-directory: ml
+        run: ../scripts/ci/run.sh "ML nightly" python -m tooltrace_ml run

@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { Radar } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { ToolSlot, AssetTag } from '@/components/tool-visuals';
 import { ErrorNote, LinkButton, PageHeader, Spinner } from '@/components/ui';
@@ -8,7 +9,7 @@ import { errorText } from '@/lib/api';
 import { relative } from '@/lib/format';
 import { useDashboard, useTools } from '@/lib/queries';
 import { can, useMe } from '@/lib/session';
-import type { Tool } from '@/lib/types';
+import type { Dashboard, Tool } from '@/lib/types';
 
 type Filter = 'all' | 'in' | 'out' | 'attention';
 
@@ -64,6 +65,8 @@ export default function BoardPage() {
           ) : undefined
         }
       />
+
+      <InsightsLink counts={dash.data?.insights ?? null} />
 
       {mine.length > 0 && (
         <section aria-labelledby="mine" className="mb-8">
@@ -145,5 +148,26 @@ export default function BoardPage() {
         </>
       )}
     </>
+  );
+}
+
+/** For crib staff and auditors: what the nightly model thinks needs attention. */
+function InsightsLink({ counts }: { counts: Dashboard['insights'] }) {
+  if (!counts) return null;
+  const parts = [
+    counts.likelyLate && `${counts.likelyLate} likely to come back late`,
+    counts.lossRisk && `${counts.lossRisk} at risk of being lost`,
+    counts.openAnomalies && `${counts.openAnomalies} unusual ${counts.openAnomalies === 1 ? 'check-out' : 'check-outs'} to review`,
+  ].filter(Boolean);
+  if (parts.length === 0) return null;
+  return (
+    <Link
+      href="/insights"
+      className="mb-8 flex items-center gap-3 rounded-lg border border-safety bg-due-soft px-4 py-3 hover:brightness-[0.98]"
+    >
+      <Radar className="size-5 shrink-0" aria-hidden />
+      <span className="min-w-0 flex-1">{parts.join(' · ')}</span>
+      <span className="shrink-0 font-semibold">See insights</span>
+    </Link>
   );
 }

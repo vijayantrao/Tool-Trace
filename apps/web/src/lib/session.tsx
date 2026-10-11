@@ -31,4 +31,6 @@ export const can = {
   seeStations: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
   manageStations: (r?: Role) => r === 'admin',
   seeAudit: (r?: Role) => r === 'admin' || r === 'auditor',
+  seeInsights: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
+  reviewAnomalies: (r?: Role) => r === 'admin' || r === 'storekeeper',
 };

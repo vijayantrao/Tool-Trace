@@ -1,0 +1,25 @@
+[project]
+name = "tooltrace-ml"
+version = "1.0.0"
+description = "ToolTrace intelligence: late-return and loss risk, unusual check-out detection"
+requires-python = ">=3.12"
+license = "MIT"
+
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "SIM", "NPY", "PD", "RUF"]
+ignore = [
+    "RUF001", "RUF002", "RUF003",  # typographic characters in strings and comments are intentional
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "S311", "S608"]  # asserts, test randomness and test SQL are fine in tests
+"tooltrace_ml/synth.py" = ["S311"]  # synthetic data: not security-sensitive randomness
+"tooltrace_ml/history.py" = ["S311"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

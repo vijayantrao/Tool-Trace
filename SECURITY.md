@@ -8,9 +8,9 @@ You'll get an acknowledgement within 7 days. Fixes are released as soon as they'
 
 ## Scope
 
-In scope: the API (`apps/api`), the web app (`apps/web`), the station firmware (`firmware/station`), database migrations (`db/migrations`) and the CI configuration.
+In scope: the API (`apps/api`), the web app (`apps/web`), the ML job (`ml`), the station firmware (`firmware/station`), database migrations (`db/migrations`) and the CI configuration.
 
-Out of scope: denial-of-service by sheer traffic volume, findings that need physical access to an unlocked device, and the deliberately public test vectors in `firmware/station/test/vectors.json`.
+Out of scope: denial-of-service by sheer traffic volume, findings that need physical access to an unlocked device, the deliberately public test vectors in `firmware/station/test/vectors.json`, and the fictional synthetic history used for demos.
 
 ## How ToolTrace is secured
 

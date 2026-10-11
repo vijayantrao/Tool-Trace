@@ -19,6 +19,9 @@ const FILTERS: { value: string; label: string }[] = [
   { value: 'invite.', label: 'Invites' },
   { value: 'station.', label: 'Stations' },
   { value: 'location.', label: 'Locations' },
+  { value: 'anomaly.', label: 'Unusual check-outs' },
+  { value: 'ml.', label: 'Model runs' },
+  { value: 'data.', label: 'Data imports' },
 ];
 
 export default function AuditPage() {
@@ -269,7 +272,7 @@ function describe(e: AuditEntry): string {
     case 'calibration.recorded':
       return `Calibration recorded for ${subject}${d.dueOn ? `, next due ${formatDay(str(d.dueOn))}` : ''}`;
     case 'tool.checked_out':
-      return `${subject} checked out`;
+      return `${subject} checked out${d.offlineQueuedAt ? ' (made offline, synced later)' : ''}`;
     case 'tool.returned':
       return `${subject} returned${d.condition && d.condition !== 'ok' ? ` (${str(d.condition).replace('_', ' ')})` : ''}`;
     case 'station.created':
@@ -280,6 +283,18 @@ function describe(e: AuditEntry): string {
       return `${subject}: ${describeChanges(d.changes)}`;
     case 'station.message_rejected':
       return `${subject}: ${REJECTED[str(d.code)] ?? str(d.code)}`;
+    case 'anomaly.flagged':
+      return `Unusual check-out flagged: ${subject}`;
+    case 'anomaly.reviewed':
+      return `Unusual check-out of ${subject} ${d.status === 'confirmed' ? 'marked for follow-up' : 'marked as fine'}${d.note ? ` (“${str(d.note)}”)` : ''}`;
+    case 'ml.run_completed': {
+      const m = (d.metrics ?? {}) as { scored?: { open?: number }; anomaly?: { flaggedNew?: number } };
+      return `Nightly model run: scored ${m.scored?.open ?? 0} tools out, flagged ${m.anomaly?.flaggedNew ?? 0} unusual check-outs`;
+    }
+    case 'ml.run_failed':
+      return `Nightly model run failed: ${str(d.error)}`;
+    case 'data.imported':
+      return `Imported ${str(d.checkouts)} check-outs (${str(d.kind)})`;
     default:
       return e.action;
   }

@@ -11,8 +11,10 @@ On a real shop floor, tools go missing, get used past their calibration date, an
 - **A tool can never be issued to two people at once**, even if two requests arrive at the same millisecond.
 - **Every account signs in with a passkey** (fingerprint, face or device PIN). There are no passwords to steal or phish.
 - **Nobody can quietly rewrite history.** Every change lands in a hash-chained audit trail that even the database owner can't edit without it showing.
+- **It sees trouble coming.** A nightly Python model flags tools likely to come back late or go missing, and odd check-outs, with the reasons, for a person to act on.
+- **No signal on the shop floor? Keep working.** Check-outs made offline sync when the signal returns, exactly once.
 
-> Status: **Phase 4 of 6 complete** (secure backend, web app, IoT stations, hardening). See the [roadmap](#roadmap).
+> Status: **Phase 5 of 6 complete** (secure backend, web app, IoT stations, hardening, intelligence). See the [roadmap](#roadmap).
 
 ## The tool board
 
@@ -64,6 +66,28 @@ Calibration auditors (ISO 9001, AS9100, IATF 16949) ask one question above all: 
 
 ![Audit trail](docs/screenshots/audit.png)
 
+## Intelligence: what the model sees
+
+Every night a **Python job** (scikit-learn) learns from the crib's history and scores every tool that is out:
+
+- **Late risk**, from the length of the check-out, night shift, weekends, the tool's category and the person's own return record (smoothed, so a newcomer starts at average).
+- **Loss risk**, updated with **Bayes' rule** the longer a tool stays overdue: "still not back after 2 days" is evidence in itself.
+- **Unusual check-outs** (an **Isolation Forest**): 3 a.m. for a day-shift worker, a three-week loan. A storekeeper marks each one "looks fine" or "needs follow-up", and that decision is audited.
+
+Each score comes with its reasons ("Returned 9 of 12 past check-outs late · Long check-out: 3.0 days"). Scores are visible to crib staff only, enforced by the database, and never trigger anything on their own.
+
+The model is evaluated **honestly**: trained on older history and tested on the newest, never-seen check-outs. On synthetic history with known planted patterns it gets within 0.02 ROC AUC of a perfect-knowledge oracle, and beats "this person is often late" by about 0.10. Where the data is too thin to measure (losses are rare), the app says so instead of quoting a number. Full details, including a feature that made things worse and was removed, are in the **[model card](docs/ML.md)**.
+
+![Insights](docs/screenshots/insights.png)
+
+## Works offline
+
+Tool cribs are often signal dead zones. With no connection, a technician can still scan a tool and check it out. The action is saved on the phone and sent the moment the signal returns, carrying an **idempotency key**, so a retry or a second tab can never apply it twice. The phone decides nothing: availability and calibration are checked by the server at sync, and if someone else took the tool meanwhile, the technician is told why.
+
+| Offline: actions wait on the phone | |
+|---|---|
+| ![Offline](docs/screenshots/mobile-offline.png) | The server records the real time each offline check-out was made (bounded: never in the future, at most 24 hours old), and the audit trail shows it was made offline. |
+
 Every change is **live**: the board, tool pages and checkouts update on every open screen within a moment, whether the change came from a phone, a station, or another browser. Database triggers send `NOTIFY` only when a transaction commits, so screens never show a change that was rolled back, and any number of API instances stay in sync.
 
 ---
@@ -83,21 +107,20 @@ flowchart LR
         DB[("PostgreSQL<br/>row-level security<br/>hash-chained audit<br/>(Neon)")]
         Redis[("Redis<br/>rate limits<br/>(Upstash)")]
         MQTT["MQTT broker<br/>(HiveMQ)"]
-        ML["Python ML job<br/>(GitHub Actions, nightly)"]
+        ML["Python ML job<br/>scikit-learn<br/>(GitHub Actions, nightly)"]
     end
 
     Phone --> Web -->|"/api proxy, same-origin cookies"| API --> DB
     API --> Redis
     Station -->|"MQTT over TLS, signed events"| MQTT --> API
-    ML -->|"risk scores"| DB
+    ML -->|"risk scores, flags<br/>(least-privilege role)"| DB
 
     classDef done fill:#d1fae5,stroke:#059669,color:#064e3b
     classDef next fill:#f3f4f6,stroke:#9ca3af,color:#374151,stroke-dasharray: 4 3
-    class API,DB,Web,Phone,Station,MQTT,Redis done
-    class ML next
+    class API,DB,Web,Phone,Station,MQTT,Redis,ML done
 ```
 
-Green parts are built. Dashed parts are on the roadmap.
+Everything shown is built. Phase 6 deploys it to the free tiers named in brackets.
 
 ## Tech stack
 
@@ -118,7 +141,8 @@ Green parts are built. Dashed parts are on the roadmap.
 | Data security | PostgreSQL **row-level security**, least-privilege role, `SECURITY DEFINER` triggers, SHA-256 hash chain | The database enforces who sees what, even if application code has a bug |
 | Rate limiting | **Redis** (atomic Lua script), in-memory fallback | Limits hold across every API instance and survive restarts |
 | Security scanning | **CodeQL** (TypeScript + C++), **gitleaks**, **OWASP ZAP**, **Grype**, `npm audit`, Dependabot | Every push and weekly; scanners pinned by version and SHA-256 checksum |
-| Planned | Python (scikit-learn) | See the roadmap |
+| Machine learning | **Python 3.13**, scikit-learn, pandas, psycopg 3 | Logistic regression vs gradient boosting (time-split selection), Isolation Forest, Bayesian overdue update, per-score explanations |
+| Offline | IndexedDB outbox, service worker, **idempotency keys** | Check-outs survive no signal and apply exactly once |
 
 ## Security design
 
@@ -137,7 +161,9 @@ Green parts are built. Dashed parts are on the roadmap.
 | A route bug leaks or changes the wrong rows | Every request runs in one transaction as the least-privileged `tooltrace_app` role with the caller's identity attached. **PostgreSQL row-level security** decides which rows each role and person can see and change |
 | Half-finished changes after an error | Any failed request rolls its whole transaction back. Read requests run `READ ONLY`, so a GET can never write |
 | "I never did that" / quiet edits to records | Database-written, append-only, **hash-chained audit trail** with anchors (see above). Failed sign-ins and forged station messages are logged too |
-| Leaked secrets, vulnerable code or images | gitleaks over the full git history, CodeQL, OWASP ZAP against the running stack, Grype CVE scan of both images |
+| Leaked secrets, vulnerable code or images | gitleaks over the full git history, CodeQL (TypeScript, Python, C++), OWASP ZAP against the running stack, Grype CVE scan of all three images |
+| Offline actions applied twice, or replayed as something else | Idempotency keys inserted first in the action's own transaction, bound to a hash of the request, per person |
+| Model scores about people seen by the wrong people | Staff-only by row-level security. The ML job's own role can't read names, emails or notes |
 | SQL injection | Every query uses bound parameters (postgres.js tagged templates). No string-built SQL |
 | Bugs that bypass the API | Calibration lockout and the one-checkout-per-tool rule are enforced **inside PostgreSQL** (trigger and partial unique index) |
 | Information leaks | Strict security headers (CSP `default-src 'none'`, HSTS, nosniff, no-referrer), `Cache-Control: no-store`, 64 KB body limit, generic error messages |
@@ -187,6 +213,10 @@ All routes live under `/api` and return JSON. Errors always look like `{ "error"
 | GET | `/station-events` | Admin, Storekeeper, Auditor | Activity log, including rejected (forged, replayed) messages |
 | GET | `/audit?action=&entityId=&before=` | Admin, Auditor | The audit trail, newest first, paged by id |
 | GET | `/audit/verify?anchorId=&anchorHash=` | Admin, Auditor | Recompute the hash chain; optionally check a saved anchor |
+| GET | `/insights` | Admin, Storekeeper, Auditor | Latest model run and metrics, every tool out with its risk and reasons, unusual check-outs |
+| POST | `/anomalies/:id/review` | Admin, Storekeeper | Mark an unusual check-out "confirmed" or "dismissed", with a note |
+
+Any `POST`, `PATCH` or `DELETE` may carry an `Idempotency-Key: <uuid>` header. Sending it again returns the first answer (with `Idempotent-Replayed: true`) without doing anything twice. `POST /checkouts` also accepts `queuedAt` for check-outs made offline.
 
 ## Run it locally
 
@@ -197,6 +227,8 @@ All routes live under `/api` and return JSON. Errors always look like `{ "error"
 ```bash
 docker compose up --build                     # web on :3000, API on :8080, MQTT broker on :1883
 docker compose exec api node apps/api/dist/scripts/seed-demo.js
+docker compose run --rm ml python -m tooltrace_ml seed-history --open   # demo history for Insights
+docker compose run --rm ml python -m tooltrace_ml run                   # score now (the ml service also runs daily)
 docker compose exec api node apps/api/dist/scripts/bootstrap-admin.js you@example.com
 # Open the printed invite link and create your passkey.
 ```
@@ -215,16 +247,31 @@ npx tsx watch --env-file=.env src/index.ts    # API on :8080
 npm run dev:web                                # web on http://localhost:3000
 ```
 
+**The ML job** (Python 3.12+), against the same database:
+
+```bash
+cd ml && pip install -r requirements.txt
+DATABASE_URL=postgres://... python -m tooltrace_ml seed-history --open   # demo: a year of synthetic history
+DATABASE_URL=postgres://... python -m tooltrace_ml run                   # the nightly job
+```
+
+With Docker Compose it runs by itself (the `ml` service). The Windows launcher runs it in Docker, so Python isn't needed there.
+
 The bootstrap script prints a one-time admin invite link. It refuses to run once an admin exists. Passkeys work on `http://localhost`; anywhere else they need https.
 
 ## Tests
 
 ```bash
-# API: 114 tests. Needs a Postgres server; each test file creates and drops its own database.
+# API: 128 tests. Needs a Postgres server; each test file creates and drops its own database.
 # Add REDIS_TEST_URL=redis://localhost:6379 to also test shared rate limits on a real Redis.
 TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm test
 
-# Browser: 21 end-to-end tests with real passkeys (first time: npx playwright install chromium)
+# ML: 30 Python tests (unit tests, plus the full job on a real Postgres)
+cd ml && pip install -r requirements-dev.txt
+TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres python -m pytest && cd ..
+
+# Browser: 23 end-to-end tests with real passkeys (first time: npx playwright install chromium).
+# Runs the real ML job, so it needs the ML requirements installed (ML_PYTHON picks the interpreter).
 npm run build -w apps/web
 E2E_DATABASE_URL=postgres://postgres:postgres@localhost:5432/tooltrace_e2e npm run test:e2e
 
@@ -236,9 +283,11 @@ The **station suite** (inside the API tests) checks the signing format against [
 
 The **security suite** attacks the database directly as the app role: a technician issuing tools to someone else, forging who issued a tool, editing tools, reading others' history, calling the audit writer; a station touching another station's row. It then plays an attacker with full database access who edits, deletes, and finally rewrites the entire audit chain, and checks that verification catches each one (the last only with an anchor). It also proves GET requests can't write, failed requests leave nothing behind, limits are shared through a real Redis, and the limiter fails open.
 
+The **ML suite** proves there is no data leakage (rewriting the future never changes a past feature), that the late-return model gets within 0.06 ROC AUC of the oracle on three independent histories and beats the "often late" baseline on average, that rare losses never justify the complex model or a quoted score, that the anomaly detector finds at least 75% of planted oddities, and that the job's database role can't read names, emails or notes, or change anything but its own results.
+
 The **API suite** covers the full passkey flow, phishing and replay rejection, role checks, CSRF blocking, cookie hardening, rate limiting, the calibration lockout (including a direct database insert that bypasses the API), concurrent checkouts, and concurrent admin demotions.
 
-The **browser suite** plays out a whole shift in Chromium with a virtual passkey authenticator: an admin bootstraps the system and invites a storekeeper and a technician, the technician checks out a tool on a phone-sized screen, an expired tool is shown as locked, the storekeeper receives a tool back damaged, quarantines it, recalibrates it, adds a new tool and prints its QR label, an admin sets up a station and assigns a badge, a simulated station's taps update another person's board live with no reload, a forged message shows up in the activity log, an admin verifies the audit trail and checks a saved anchor, and a deactivated user is signed out everywhere. Every main screen is also scanned with **axe** for WCAG 2.1 AA accessibility problems.
+The **browser suite** plays out a whole shift in Chromium with a virtual passkey authenticator: an admin bootstraps the system and invites a storekeeper and a technician, the technician checks out a tool on a phone-sized screen, an expired tool is shown as locked, the storekeeper receives a tool back damaged, quarantines it, recalibrates it, adds a new tool and prints its QR label, an admin sets up a station and assigns a badge, a simulated station's taps update another person's board live with no reload, a forged message shows up in the activity log, an admin verifies the audit trail and checks a saved anchor, a technician with no signal checks out two tools and one is refused at sync because the storekeeper took it meanwhile, the real nightly ML job runs and the storekeeper reviews a flagged check-out, and a deactivated user is signed out everywhere. Every main screen is also scanned with **axe** for WCAG 2.1 AA accessibility problems.
 
 ## Project structure
 
@@ -250,14 +299,18 @@ apps/api/
   src/middleware/       sessions + roles, CSRF origin guard, request transactions as the least-privileged role
   test/                 integration tests and a software passkey authenticator
 apps/web/
-  src/app/(app)/        board, tools, tool detail, scan, checkouts, QR labels, people, stations, audit trail
+  src/app/(app)/        board, tools, tool detail, scan, checkouts, QR labels, people, stations, audit trail, insights
+  src/lib/              API client, offline outbox (IndexedDB) and sync, live updates
   src/app/(auth)/       passkey sign-in and invite acceptance
   src/app/api/          same-origin proxy to the API
   src/components/       shadow-board slot, calibration sticker, hang tag, QR scanner
   e2e/                  Playwright journeys with virtual passkeys and axe checks
+ml/tooltrace_ml/        nightly job: synthetic history, features, models, anomalies, explanations
+ml/tests/               no-leakage, accuracy-vs-oracle and database privilege tests
 firmware/station/       ESP32 C++ firmware, host tests, shared vectors, Wokwi project
-db/migrations/          plain SQL, applied in order under an advisory lock (003: RLS, audit chain)
+db/migrations/          plain SQL, applied in order under an advisory lock (003: RLS, audit chain; 004: ML results, idempotency)
 docs/THREAT_MODEL.md    STRIDE threat model
+docs/ML.md              model card: data, features, evaluation, limitations
 scripts/windows/        one-click launch and test scripts
 .github/                CI and security workflows, Dependabot
 ```
@@ -268,7 +321,7 @@ scripts/windows/        one-click launch and test scripts
 - [x] **Phase 2: Web app.** Shadow-board dashboard, QR scan-to-checkout, printable QR labels, invites, installable PWA, browser tests with real passkeys
 - [x] **Phase 3: IoT.** ESP32 + RFID smart station (C++), signed MQTT over TLS, live floor updates, badges and tool tags, Wokwi simulation
 - [x] **Phase 4: Hardening.** Hash-chained tamper-evident audit log, Redis rate limiting, Postgres row-level security, CodeQL, gitleaks, OWASP ZAP, STRIDE threat model
-- [ ] **Phase 5: Intelligence.** Python ML for late-return and loss risk, anomaly detection, offline sync
+- [x] **Phase 5: Intelligence.** Python ML for late-return and loss risk, anomaly detection, offline sync
 - [ ] **Phase 6: Launch.** Free-tier deployment, demo accounts, demo video
 
 ---

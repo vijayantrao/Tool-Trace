@@ -54,6 +54,38 @@ jobs:
       - run: scripts/ci/run.sh "API tests" npm test
       - run: npm run build
 
+  ml:
+    name: ML - lint and tests (Python)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+    defaults:
+      run:
+        working-directory: ml
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: ml/requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: ../scripts/ci/run.sh "ML tests" python -m pytest
+
   e2e:
     name: Web - browser tests with real passkeys
     runs-on: ubuntu-latest
@@ -72,6 +104,7 @@ jobs:
     env:
       E2E_DATABASE_URL: postgres://postgres:postgres@localhost:5432/tooltrace_e2e
       NEXT_TELEMETRY_DISABLED: 1
+      ML_PYTHON: python
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v6
@@ -79,6 +112,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # The journey runs the real nightly ML job against the test database.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: ml/requirements.txt
+      - run: pip install -r ml/requirements.txt
       - run: npm run build -w apps/web
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
@@ -120,6 +160,7 @@ jobs:
       - uses: actions/checkout@v5
       - run: docker build -f apps/api/Dockerfile -t tooltrace-api:ci .
       - run: docker build -f apps/web/Dockerfile -t tooltrace-web:ci .
+      - run: docker build -f ml/Dockerfile -t tooltrace-ml:ci .
       - name: Install Grype (pinned, checksum-verified)
         run: |
           curl -sSfL -o grype.tgz https://github.com/anchore/grype/releases/download/v0.120.1/grype_0.120.1_linux_amd64.tar.gz
@@ -136,3 +177,8 @@ jobs:
         run: |
           scripts/ci/run.sh "Grype (web image)" "$RUNNER_TEMP/grype" tooltrace-web:ci --only-fixed -o json --file grype-web.json
           node scripts/ci/grype-report.mjs grype-web.json "Web image"
+      - name: Scan ML image
+        if: success() || failure()
+        run: |
+          scripts/ci/run.sh "Grype (ML image)" "$RUNNER_TEMP/grype" tooltrace-ml:ci --only-fixed -o json --file grype-ml.json
+          node scripts/ci/grype-report.mjs grype-ml.json "ML image"

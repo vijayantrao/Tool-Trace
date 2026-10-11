@@ -5,6 +5,7 @@ import { api } from './api';
 import type {
   AuditEntry,
   AuditVerification,
+  Insights,
   Checkout,
   Dashboard,
   Holder,
@@ -32,6 +33,7 @@ export const keys = {
   stations: ['stations'] as const,
   stationEvents: ['station-events'] as const,
   audit: (action: string) => ['audit', action] as const,
+  insights: ['insights'] as const,
 };
 
 const qs = (q: Record<string, string>) => {
@@ -239,3 +241,16 @@ export const useVerifyAudit = () =>
     mutationFn: (anchor?: { id: number; hash: string }) =>
       api<AuditVerification>(`/audit/verify${anchor ? qs({ anchorId: String(anchor.id), anchorHash: anchor.hash }) : ''}`),
   });
+
+export const useInsights = (enabled: boolean) =>
+  useQuery({ queryKey: keys.insights, queryFn: () => api<Insights>('/insights'), enabled, refetchInterval: 60_000 });
+
+export function useReviewAnomaly() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; status: 'confirmed' | 'dismissed'; note?: string }) =>
+      api(`/anomalies/${id}/review`, { body }),
+    onSuccess: () =>
+      Promise.all([qc.invalidateQueries({ queryKey: keys.insights }), qc.invalidateQueries({ queryKey: keys.dashboard })]),
+  });
+}

@@ -1,6 +1,7 @@
 /**
  * Runs before the API starts for end-to-end tests: fresh database, migrate,
- * demo tools, and the bootstrap admin invite minted by the real CLI script.
+ * demo tools, synthetic history for the ML job, and the bootstrap admin invite
+ * minted by the real CLI script.
  */
 import { execFileSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
@@ -25,6 +26,12 @@ const run = (script: string, ...args: string[]) =>
 
 run('migrate');
 run('seed-demo');
+// A year of synthetic history (all returned), so the nightly model has something to learn from.
+execFileSync(process.env.ML_PYTHON ?? 'python3', ['-m', 'tooltrace_ml', 'seed-history'], {
+  cwd: path.resolve(import.meta.dirname, '../../../ml'),
+  env: process.env,
+  encoding: 'utf8',
+});
 const out = run('bootstrap-admin', 'admin@tooltrace.example');
 const inviteUrl = out.match(/https?:\/\/\S+/)?.[0];
 if (!inviteUrl) throw new Error(`No invite URL in bootstrap output:\n${out}`);

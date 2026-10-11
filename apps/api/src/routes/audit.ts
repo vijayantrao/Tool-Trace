@@ -31,7 +31,7 @@ export function auditRoutes(_deps: Deps) {
                a.actor_user_id, u.display_name AS actor_name,
                a.actor_station_id, s.name AS station_name,
                t.asset_tag AS tool_asset_tag,
-               coalesce(t.asset_tag || ' ' || t.name, eu.display_name, es.name) AS entity_name,
+               coalesce(t.asset_tag || ' ' || t.name, eu.display_name, es.name, ckt.asset_tag || ' ' || ckt.name) AS entity_name,
                encode(a.hash, 'hex') AS hash
         FROM audit_log a
         LEFT JOIN users u ON u.id = a.actor_user_id
@@ -39,6 +39,8 @@ export function auditRoutes(_deps: Deps) {
         LEFT JOIN tools t ON a.entity_type = 'tool' AND t.id::text = a.entity_id
         LEFT JOIN users eu ON a.entity_type = 'user' AND eu.id::text = a.entity_id
         LEFT JOIN stations es ON a.entity_type = 'station' AND es.id::text = a.entity_id
+        LEFT JOIN checkouts ck ON a.entity_type = 'checkout' AND ck.id::text = a.entity_id
+        LEFT JOIN tools ckt ON ckt.id = ck.tool_id
         WHERE (${like}::text IS NULL OR a.action LIKE ${like})
           AND (${q.entityId ?? null}::text IS NULL OR a.entity_id = ${q.entityId ?? null})
           AND (${q.before ?? null}::bigint IS NULL OR a.id < ${q.before ?? null})

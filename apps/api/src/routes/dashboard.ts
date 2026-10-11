@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { db } from '../middleware/db.js';
 import { currentUser, requireAuth } from '../middleware/session.js';
+import { LIKELY_LATE, LOSS_RISK } from './insights.js';
 import { DUE_SOON_DAYS } from './tools.js';
 import type { AppEnv, Deps } from '../types.js';
 
@@ -30,7 +31,18 @@ export function dashboardRoutes(_deps: Deps) {
       FROM checkouts c JOIN tools t ON t.id = c.tool_id
       WHERE c.holder_id = ${user.id} AND c.returned_at IS NULL
       ORDER BY c.due_back_at`;
-    return c.json({ counts, myCheckouts, dueSoonDays: DUE_SOON_DAYS });
+    // Crib staff and auditors also get a one-line summary of the model's view of the floor.
+    let insights = null;
+    if (['admin', 'storekeeper', 'auditor'].includes(user.role)) {
+      [insights] = await sql`
+        SELECT
+          (SELECT count(*)::int FROM checkouts c JOIN risk_scores r ON r.checkout_id = c.id
+            WHERE c.returned_at IS NULL AND c.due_back_at >= now() AND r.late_probability >= ${LIKELY_LATE}) AS likely_late,
+          (SELECT count(*)::int FROM checkouts c JOIN risk_scores r ON r.checkout_id = c.id
+            WHERE c.returned_at IS NULL AND r.loss_probability >= ${LOSS_RISK}) AS loss_risk,
+          (SELECT count(*)::int FROM anomalies WHERE status = 'open') AS open_anomalies`;
+    }
+    return c.json({ counts, myCheckouts, dueSoonDays: DUE_SOON_DAYS, insights });
   });
 
   return app;

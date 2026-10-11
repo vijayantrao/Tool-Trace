@@ -60,6 +60,20 @@ services:
     ports:
       - "1883:1883"
 
+  ml:
+    # The nightly job (in production it runs on a GitHub Actions schedule). Runs once at
+    # start-up, then every 24 hours. Demo history: docker compose run --rm ml python -m tooltrace_ml seed-history --open
+    build:
+      context: .
+      dockerfile: ml/Dockerfile
+    environment:
+      DATABASE_URL: postgres://tooltrace:tooltrace_local_only@db:5432/tooltrace
+      TOOLTRACE_SITE_TZ: Asia/Kolkata
+    command: ["sh", "-c", "while true; do python -m tooltrace_ml run || true; sleep 86400; done"]
+    depends_on:
+      api:
+        condition: service_healthy # the API applies migrations on start
+
   web:
     build:
       context: .

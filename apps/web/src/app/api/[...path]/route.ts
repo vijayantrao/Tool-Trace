@@ -12,11 +12,12 @@ export const dynamic = 'force-dynamic';
 const API_URL = (process.env.API_URL ?? 'http://localhost:8080').replace(/\/$/, '');
 
 // Only these request headers are forwarded. Everything else is dropped.
-const FORWARD_REQUEST = ['cookie', 'content-type', 'origin', 'user-agent', 'sec-fetch-site', 'accept'];
+const FORWARD_REQUEST = ['cookie', 'content-type', 'origin', 'user-agent', 'sec-fetch-site', 'accept', 'idempotency-key'];
 // Only these response headers are passed back to the browser (plus every Set-Cookie).
 const FORWARD_RESPONSE = [
   'content-type',
   'cache-control',
+  'idempotent-replayed',
   'ratelimit-limit',
   'ratelimit-remaining',
   'retry-after',

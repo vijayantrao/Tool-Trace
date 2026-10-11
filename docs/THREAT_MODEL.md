@@ -2,7 +2,7 @@
 
 This document uses **STRIDE** (Spoofing, Tampering, Repudiation, Information disclosure, Denial of service, Elevation of privilege) to walk through what could go wrong in ToolTrace, what stops it, and where the code and tests for each defense live. It ends with the risks that remain, stated plainly.
 
-Last reviewed: Phase 4 (hardening).
+Last reviewed: Phase 5 (intelligence and offline sync).
 
 ## 1. What we protect
 
@@ -11,6 +11,8 @@ Last reviewed: Phase 4 (hardening).
 | **Check-out records** (who has which tool) | Lost-tool investigations and accountability depend on them |
 | **Calibration records** | Using an out-of-calibration torque wrench can mean a failed aircraft or car part. Auditors (ISO 9001 / AS9100 / IATF 16949) inspect these |
 | **The audit trail** | Evidence. Worthless if it can be edited |
+| **Risk scores and anomaly flags** | Inferences about people's behaviour. Harmful if misread as verdicts or seen by the wrong people |
+| **Offline outbox on a phone** | Actions not yet sent: must be applied exactly once, by the right person |
 | **Accounts and roles** | An attacker with Admin can do anything |
 | **Station master key** | Every station key is derived from it |
 | **Personal data** | Names, work emails, badge UIDs, sign-in IP addresses |
@@ -20,7 +22,7 @@ Last reviewed: Phase 4 (hardening).
 ```mermaid
 flowchart LR
     subgraph Untrusted["Untrusted: internet and shop floor"]
-        B["Browser / phone<br/>(PWA)"]
+        B["Browser / phone<br/>(PWA, offline outbox)"]
         S["ESP32 station<br/>(physically reachable)"]
         X["Anyone else"]
     end
@@ -38,6 +40,9 @@ flowchart LR
     subgraph Data["Boundary 4: PostgreSQL"]
         D[("tooltrace_app role<br/>row-level security<br/>triggers, constraints<br/>hash-chained audit_log")]
     end
+    subgraph Batch["Boundary 5: nightly ML job"]
+        J["Python job<br/>(GitHub Actions)"]
+    end
     B -- "HTTPS, passkeys, __Host- cookie" --> W
     X -.-> W
     W -- "allow-listed headers" --> A
@@ -47,6 +52,7 @@ flowchart LR
     A --> R
     A -- "SET LOCAL ROLE tooltrace_app" --> D
     G -- "SET LOCAL ROLE tooltrace_app" --> D
+    J -- "SET ROLE tooltrace_ml" --> D
 ```
 
 **Boundary 4 is the important one.** Every request a signed-in person makes, and every station message, runs inside a database transaction that has switched to the least-privileged `tooltrace_app` role with the caller's identity attached (`tooltrace.role`, `tooltrace.user_id`, `tooltrace.station_id`). PostgreSQL itself then enforces who may see and change which rows. A bug in a route handler can't hand a technician someone else's data, because the database won't return it.
@@ -62,6 +68,8 @@ flowchart LR
 | F5 | API → PostgreSQL | TLS in production | Database credentials, then `SET LOCAL ROLE` |
 | F6 | API → Redis | Private network or TLS | Redis URL credentials |
 | F7 | PostgreSQL → API (NOTIFY) | Same connection | Only fires on commit |
+| F8 | Phone outbox → API (replay) | As F1 | Same session as F1, plus an `Idempotency-Key` per action |
+| F9 | ML job → PostgreSQL | TLS in production | `ML_DATABASE_URL` secret, then `SET ROLE tooltrace_ml` |
 
 ## 3. STRIDE analysis
 
@@ -94,7 +102,12 @@ Each row names the defense, where it is implemented, and the test that proves it
 | A superuser bypasses the triggers and edits history | Hash chain: each entry stores `sha256(prev_hash ‖ entry)`. `/api/audit/verify` recomputes the whole chain and reports the first edited, missing or relinked entry | `audit_append()`, `routes/audit.ts` | `security.test.ts` "spots an edited entry", "spots a deleted entry" |
 | A superuser rewrites the **entire** chain consistently | **Anchors**: the verify screen shows `id:hash` of the head; saved outside ToolTrace, it later proves the chain still contains that exact entry | `routes/audit.ts`, `/audit` page | `security.test.ts` "spots a rewritten chain, given an anchor recorded earlier", e2e audit test |
 | Gaps in the chain from concurrent writers | `audit_append()` takes a transaction-level advisory lock; ids are gapless and in commit order | `audit_append()` | `security.test.ts` "verifies as intact, with gapless ids, after many concurrent writes" |
-| Malicious dependency or leaked secret in git | Dependabot, `npm audit` (high), gitleaks over full history, CodeQL, Grype image scan | `.github/workflows/*` | CI |
+| Malicious dependency or leaked secret in git | Dependabot (npm, pip, Actions, Docker), `npm audit` (high), gitleaks over full history, CodeQL, Grype image scan | `.github/workflows/*` | CI |
+| An offline action is applied twice (flaky network retries, two open tabs) | **Idempotency keys**: the key row is inserted first, in the same transaction as the action, so a duplicate waits for the original and gets its stored answer | `middleware/idempotency.ts` | `intelligence.test.ts` "simultaneous duplicates… still happen once" |
+| A key is reused to smuggle in a different action | Each key is bound to a SHA-256 of method, path and body; a mismatch is refused (422). Keys are per person and expire after 7 days | `middleware/idempotency.ts` | "refuses to reuse a key for a different request", "keys belong to one person" |
+| A phone claims a false time for an offline check-out | Server time stays authoritative (`checked_out_at`). The phone's time is stored separately and bounded (not in the future, at most 24 h old) in the API **and** by a database CHECK | `routes/checkouts.ts`, `004_intelligence.sql` | "records when an offline check-out really happened, within limits" |
+| The phone wrongly decides a tool is free while offline | Nothing is decided offline: every rule (availability, calibration, roles) runs on the server at sync, and a refusal is shown to the person | `lib/offline.tsx` | e2e "…sync when the signal returns" (a conflicting offline check-out is refused) |
+| The ML job, or its credentials, used to change records | `tooltrace_ml` reads only the columns it learns from and writes only its own result tables; it can't update check-outs or call the audit writer | `004_intelligence.sql` | `ml/tests/test_database.py` "ml role reads only what it learns from" |
 
 ### R: Repudiation ("I never did that")
 
@@ -104,6 +117,8 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Someone denies trying to sign in | Failed sign-ins are recorded with the reason (unknown passkey, deactivated, wrong user, bad signature). The client always gets the same generic error |
 | A station claims it never sent a forged message | Rejected station messages (bad signature, replay, wrong clock, malformed, switched off) go to the audit trail too |
 | The log itself is disputed | The hash chain plus external anchors make the log tamper-evident (see Tampering) |
+| "The system accused me" / "nobody reviewed that flag" | Every model run (with its metrics), every flag and every review (who, decision, note) is in the audit trail. Flags never act on their own; a person decides |
+| An offline action's origin is disputed | The check-out's audit entry records that it was made offline and when (`offlineQueuedAt`) |
 
 ### I: Information disclosure
 
@@ -118,6 +133,9 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Invite token in server logs | Token sits in the URL fragment, which browsers never send; it's wiped from the address bar once read | e2e invite test |
 | Spectre-style side-channel reads by another site | Cross-origin isolation: `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy` and `Cross-Origin-Embedder-Policy` on every page | e2e security headers test, ZAP rule 90004 |
 | Shared tablet shows a previous user's data | Service worker never caches `/api`; `Cache-Control: no-store` | e2e |
+| Risk scores about people leak to colleagues | Scores, flags and model runs are readable by admins, storekeepers and auditors only, by row-level security. Technicians never see scores, not even their own | `intelligence.test.ts` "never shows technicians scores…" |
+| The ML job reads personal data it doesn't need | Column-level grants: no names, emails, notes, passkeys or audit log. Person ids are never model inputs | `ml/tests/test_database.py` |
+| Another person's queued actions sent with my session | Outbox items carry their owner's id and are only replayed by that person's session; signing out discards them (after a warning) | `lib/outbox.ts`, `lib/offline.tsx` |
 
 ### D: Denial of service
 
@@ -141,6 +159,7 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Deactivated user keeps a session | Deactivation or role change deletes all their sessions immediately | e2e "signed out everywhere" |
 | Code in the app role calls privileged functions | `audit_append()` is `SECURITY DEFINER` with `EXECUTE` revoked from `PUBLIC`; it's reachable only through triggers | `security.test.ts` (42501) |
 | CSRF makes a signed-in user act | `SameSite=Strict` + Origin / `Sec-Fetch-Site` check on every state change | `auth.test.ts` |
+| A reviewer records a decision in someone else's name | RLS `WITH CHECK (reviewed_by = app_user())` on anomaly reviews | `intelligence.test.ts` "cannot sign a review in someone else's name" |
 
 ## 4. Residual risks (what is *not* fully solved)
 
@@ -156,16 +175,20 @@ Being honest about these is part of the design.
 8. **Web CSP allows `'unsafe-inline'` scripts.** Next.js inlines its bootstrap scripts; nonces would force every page to render dynamically. React's output escaping is the main XSS defense; there is no user-supplied HTML anywhere.
 9. **Public demo MQTT brokers.** The development broker is anonymous. Messages are still signed, so a stranger can't forge taps, but they can see tag UIDs. Production must use a broker with TLS and credentials.
 10. **Lost passkey device.** An admin re-invites the person; there's no self-service recovery, by design.
+11. **The offline outbox is stored unencrypted on the phone** (IndexedDB: asset tags, due times, the person's id; the last signed-in person's id and name in localStorage for the offline page). No tokens or passwords are stored, and signing out clears it, but anyone holding an unlocked phone can read it.
+12. **The nightly job's secret is an owner-level connection string** in GitHub Actions secrets. The job drops to `tooltrace_ml` immediately, but a leaked secret is owner access. Production should use a dedicated login role that is a member of `tooltrace_ml` only.
+13. **Model risks** (synthetic training data, feedback loops, fairness, data poisoning by people shaping their own history) are covered in the [model card](ML.md). Mitigations: staff-only, explained, audited, never automatic.
 
 ## 5. How this is verified continuously
 
 | Check | Where | Runs |
 |---|---|---|
-| 114 API integration tests (27 security-specific: RLS, privileges, audit chain tampering, rate limits on real Redis) | `apps/api/test` | Every push |
-| 21 browser tests with real passkeys and axe accessibility scans, including the audit trail | `apps/web/e2e` | Every push |
+| 128 API integration tests (27 Phase 4 security tests, 14 for insights, reviews and idempotent replays) | `apps/api/test` | Every push |
+| 30 Python tests: no-leakage features, near-oracle accuracy, anomaly recall, and the ML role's privileges on a real PostgreSQL | `ml/tests` | Every push |
+| 23 browser tests with real passkeys and axe accessibility scans, including offline check-outs and the nightly model | `apps/web/e2e` | Every push |
 | 58 firmware checks against shared signing vectors | `firmware/station/test/host` | Every push |
-| CodeQL (`security-extended`) for TypeScript and the C++ station core | `security.yml` | Every push + weekly |
+| CodeQL (`security-extended`) for TypeScript, Python and the C++ station core | `security.yml` | Every push + weekly |
 | gitleaks over the full git history | `security.yml` | Every push + weekly |
 | OWASP ZAP baseline against the full Docker Compose stack | `security.yml` | Every push + weekly |
-| Grype CVE scan of both container images | `ci.yml` | Every push |
+| Grype CVE scan of all three container images (API, web, ML) | `ci.yml` | Every push |
 | `npm audit`, Dependabot (npm, Actions, Docker) | `ci.yml`, `dependabot.yml` | Every push / weekly |

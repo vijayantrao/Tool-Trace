@@ -89,6 +89,8 @@ export interface Dashboard {
     overdue: boolean;
   }[];
   dueSoonDays: number;
+  /** Staff and auditors only. */
+  insights: { likelyLate: number; lossRisk: number; openAnomalies: number } | null;
 }
 
 export interface UserRow {
@@ -184,4 +186,90 @@ export interface AuditVerification {
   head: { id: number; hash: string } | null;
   firstProblem: { id: number; reason: 'missing_entries' | 'broken_link' | 'content_changed' } | null;
   anchorMatches: boolean | null;
+}
+
+export interface RiskFactor {
+  key: string;
+  text: string;
+  impact: number;
+}
+
+export interface AtRiskCheckout {
+  checkoutId: string;
+  toolId: string;
+  assetTag: string;
+  toolName: string;
+  category: string;
+  holderId: string;
+  holderName: string;
+  checkedOutAt: string;
+  dueBackAt: string;
+  offlineQueuedAt: string | null;
+  overdue: boolean;
+  lateProbability: number | null;
+  lossProbability: number | null;
+  factors: RiskFactor[];
+  scoredAt: string | null;
+}
+
+export interface Anomaly {
+  id: string;
+  checkoutId: string;
+  score: number;
+  reasons: { key: string; text: string; z: number }[];
+  detectedAt: string;
+  status: 'open' | 'confirmed' | 'dismissed';
+  reviewNote: string | null;
+  reviewedAt: string | null;
+  reviewedByName: string | null;
+  toolId: string;
+  assetTag: string;
+  toolName: string;
+  holderName: string;
+  checkedOutAt: string;
+  dueBackAt: string;
+  returnedAt: string | null;
+}
+
+export interface ModelMetrics {
+  model: string;
+  labelled?: number;
+  reason?: string;
+  validationRocAuc?: Record<string, number | null>;
+  test?: {
+    n: number;
+    positives?: number;
+    baseRate: number | null;
+    rocAuc: number | null;
+    prAuc: number | null;
+    brier: number | null;
+  };
+  testReliable?: boolean;
+  selection?: string;
+  baselineTestRocAuc?: number | null;
+}
+
+export interface MlRun {
+  id: string;
+  startedAt: string;
+  finishedAt: string | null;
+  status: 'running' | 'succeeded' | 'failed';
+  modelVersion: string;
+  trainedOn: number | null;
+  error: string | null;
+  metrics: {
+    late?: ModelMetrics;
+    loss?: ModelMetrics;
+    anomaly?: { trainedOn: number; flagFraction: number; scoredRecent: number; flaggedNew: number };
+    scored?: { open: number };
+    data?: { checkouts: number; from: string | null; to: string | null };
+  };
+}
+
+export interface Insights {
+  latestRun: MlRun | null;
+  lastSuccessfulRun: MlRun | null;
+  thresholds: { likelyLate: number; lossRisk: number };
+  atRisk: AtRiskCheckout[];
+  anomalies: Anomaly[];
 }

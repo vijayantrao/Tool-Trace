@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Browser, type BrowserContext, type Locator, type Page } from '@playwright/test';
@@ -9,9 +10,13 @@ export const state = () => JSON.parse(readFileSync(STATE_FILE, 'utf8')) as { adm
 
 export const SHOTS = process.env.SCREENSHOTS ? '../../docs/screenshots' : null;
 
-export async function shot(page: Page, name: string, opts: { fullPage?: boolean; mask?: Locator[] } = {}) {
+export async function shot(
+  page: Page,
+  name: string,
+  opts: { fullPage?: boolean; mask?: Locator[]; offline?: boolean } = {},
+) {
   if (!SHOTS) return;
-  await page.waitForLoadState('networkidle');
+  if (!opts.offline) await page.waitForLoadState('networkidle');
   const size = page.viewportSize()!;
   if (opts.fullPage) {
     // Grow the viewport instead of using fullPage, so the sticky side rail spans the whole image.
@@ -103,4 +108,13 @@ export async function connectStation(stationId: string, keyHex: string, port: nu
     },
     close: () => client.endAsync(),
   };
+}
+
+/** Runs the nightly ML job (Python) against the end-to-end database, as cron would. */
+export function runNightlyModel(databaseUrl: string): string {
+  return execFileSync(process.env.ML_PYTHON ?? 'python3', ['-m', 'tooltrace_ml', 'run'], {
+    cwd: path.resolve(import.meta.dirname, '../../../ml'),
+    env: { ...process.env, DATABASE_URL: databaseUrl },
+    encoding: 'utf8',
+  });
 }

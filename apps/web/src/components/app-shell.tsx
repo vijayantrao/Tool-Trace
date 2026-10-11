@@ -10,6 +10,7 @@ import {
   LogOut,
   Menu,
   QrCode,
+  Radar,
   RadioTower,
   ScanLine,
   Users,
@@ -17,7 +18,10 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
+import { OfflineBanner } from '@/components/offline-banner';
 import { api } from '@/lib/api';
+import { useOffline } from '@/lib/offline';
+import * as outbox from '@/lib/outbox';
 import { initials, roleLabel } from '@/lib/format';
 import { LiveBadge } from '@/lib/live';
 import { can } from '@/lib/session';
@@ -37,6 +41,7 @@ const nav: NavItem[] = [
   { href: '/checkouts', label: 'Checkouts', icon: ArrowLeftRight },
   { href: '/labels', label: 'QR labels', icon: QrCode, show: (m) => can.manageTools(m.role) },
   { href: '/stations', label: 'Stations', icon: RadioTower, show: (m) => can.seeStations(m.role) },
+  { href: '/insights', label: 'Insights', icon: Radar, show: (m) => can.seeInsights(m.role) },
   { href: '/people', label: 'People', icon: Users, show: (m) => can.seePeople(m.role) },
   { href: '/audit', label: 'Audit trail', icon: FileClock, show: (m) => can.seeAudit(m.role) },
 ];
@@ -46,7 +51,17 @@ const isActive = (path: string, href: string) => (href === '/' ? path === '/' : 
 export function useSignOut() {
   const router = useRouter();
   const qc = useQueryClient();
+  const offline = useOffline();
   return async () => {
+    // Unsent offline actions belong to this person's session: they can't be sent by anyone else.
+    const unsent = offline?.items.length ?? 0;
+    if (unsent > 0) {
+      const what = unsent === 1 ? 'an offline action that hasn’t' : `${unsent} offline actions that haven’t`;
+      if (!window.confirm(`You have ${what} been sent yet. Sign out and discard ${unsent === 1 ? 'it' : 'them'}?`)) return;
+    }
+    const me = qc.getQueryData<{ id: string } | null>(['me']);
+    if (me) await outbox.clear(me.id);
+    outbox.rememberUser(null);
     await api('/auth/logout', { method: 'POST', body: {} }).catch(() => {});
     qc.clear();
     router.replace('/login');
@@ -127,7 +142,10 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         </Link>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-4 pb-32 pt-6 md:px-10 md:pb-16 md:pt-10">{children}</main>
+      <main className="mx-auto w-full max-w-6xl px-4 pb-32 pt-6 md:px-10 md:pb-16 md:pt-10">
+        <OfflineBanner />
+        {children}
+      </main>
 
       {/* Mobile bottom bar, thumb-reachable, with the scan button in the middle */}
       <nav

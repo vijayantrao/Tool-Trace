@@ -6,6 +6,7 @@ import { toast } from '@/components/toast';
 import { keys } from './queries';
 import { meKey } from './session';
 import type { FloorEvent } from './types';
+import { useOnline } from './offline';
 
 export type LiveState = 'connecting' | 'live' | 'reconnecting';
 const LiveContext = createContext<LiveState>('connecting');
@@ -79,14 +80,23 @@ export function LiveFloorProvider({ meId, children }: { meId: string; children: 
 
 /** Small status light: is this screen live? */
 export function LiveBadge({ tone = 'dark' }: { tone?: 'dark' | 'light' }) {
-  const state = useLiveState();
-  const label = { connecting: 'Connecting', live: 'Live', reconnecting: 'Reconnecting' }[state];
-  const dot = { connecting: 'bg-white/50', live: 'bg-[#7ee2a8]', reconnecting: 'bg-safety' }[state];
+  const online = useOnline();
+  const live = useLiveState();
+  // The browser knows it's offline before the event stream times out.
+  const state = online ? live : 'offline';
+  const label = { connecting: 'Connecting', live: 'Live', reconnecting: 'Reconnecting', offline: 'Offline' }[state];
+  const dot = { connecting: 'bg-white/50', live: 'bg-[#7ee2a8]', reconnecting: 'bg-safety', offline: 'bg-safety' }[state];
   return (
     <span
       role="status"
       aria-label={`Live updates: ${label.toLowerCase()}`}
-      title={state === 'live' ? 'Changes appear here as they happen' : 'Trying to reconnect for live updates'}
+      title={
+        state === 'live'
+          ? 'Changes appear here as they happen'
+          : state === 'offline'
+            ? 'No connection: actions are saved and sent when you’re back online'
+            : 'Trying to reconnect for live updates'
+      }
       className={`inline-flex items-center gap-1.5 text-xs font-semibold ${tone === 'dark' ? 'text-machine-ink/85' : 'text-muted'}`}
     >
       <span className="relative flex size-2">

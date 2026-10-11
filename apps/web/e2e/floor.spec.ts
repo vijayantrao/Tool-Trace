@@ -5,8 +5,17 @@
  * damaged, quarantines it, recalibrates it, and access is revoked.
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { MQTT_PORT } from '../playwright.config';
-import { acceptInvite, connectStation, expectAccessible, personWithPasskey, shot, SHOTS, state } from './helpers';
+import { DB_URL, MQTT_PORT } from '../playwright.config';
+import {
+  acceptInvite,
+  connectStation,
+  expectAccessible,
+  personWithPasskey,
+  runNightlyModel,
+  shot,
+  SHOTS,
+  state,
+} from './helpers';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -16,8 +25,8 @@ let tech: { context: BrowserContext; page: Page };
 
 async function invite(page: Page, email: string, role: string): Promise<string> {
   await page.goto('/people');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Role').selectOption(role);
+  await page.getByLabel('Email', { exact: true }).fill(email);
+  await page.getByLabel('Role', { exact: true }).selectOption(role);
   await page.getByRole('button', { name: 'Create invite' }).click();
   const link = page.getByLabel('Invite link');
   await expect(link).toHaveValue(/\/accept-invite#token=/);
@@ -253,12 +262,72 @@ test('the audit trail shows who did what and proves nothing was altered', async 
   await shot(page, 'audit');
 });
 
+test('a technician with no signal checks tools out, and they sync when the signal returns', async () => {
+  const { page, context } = tech;
+  await page.goto('/scan');
+  await context.setOffline(true);
+  await expect(page.getByText("You're offline.")).toBeVisible();
+
+  for (const tag of ['IW-0701', 'CR-0501']) {
+    await page.getByLabel('Or type the asset tag').fill(tag);
+    await page.getByRole('button', { name: 'Find' }).click();
+    await expect(page.getByRole('heading', { name: 'No connection' })).toBeVisible();
+    await page.getByRole('button', { name: `Check out ${tag} when back online` }).click();
+    await expect(page.getByRole('status').filter({ hasText: `Check out ${tag}` }).first()).toBeVisible();
+  }
+  await expect(page.getByText("2 actions will be sent as soon as you're back online.")).toBeVisible();
+  await shot(page, 'mobile-offline', { offline: true });
+
+  // Meanwhile, at the crib (online), the storekeeper takes CR-0501.
+  await storekeeper.page.goto('/t/CR-0501');
+  await storekeeper.page.getByRole('button', { name: 'Check out CR-0501' }).click();
+  await expect(storekeeper.page.getByRole('status').filter({ hasText: 'Checked out CR-0501' })).toBeVisible();
+
+  await context.setOffline(false);
+  await expect(page.getByText('Synced: IW-0701 checked out')).toBeVisible({ timeout: 20_000 });
+  // The phone never decides: the server refused CR-0501, and the technician is told why.
+  const failed = page.getByRole('region', { name: /couldn.t be completed/ });
+  await expect(failed).toContainText(/Check out CR-0501:.*not available/);
+  await page.getByRole('button', { name: 'Dismiss: Check out CR-0501' }).click();
+  await expect(failed).toHaveCount(0);
+
+  await storekeeper.page.goto('/');
+  await expect(storekeeper.page.getByRole('link', { name: /^IW-0701 .* checked out to Asha Verma/ })).toBeVisible();
+});
+
+test('the nightly model scores what is out and flags unusual check-outs for review', async () => {
+  const out = runNightlyModel(DB_URL);
+  expect(out).toMatch(/trained on \d+ check-outs/);
+
+  const { page } = storekeeper;
+  await page.goto('/');
+  await page.getByRole('link', { name: /See insights/ }).click();
+  await expect(page.getByRole('heading', { name: 'Insights', exact: true })).toBeVisible();
+  await expect(page.getByText(/learned from [\d,]+ past check-outs/)).toBeVisible();
+
+  const tools = page.getByRole('region', { name: 'Tools out now' });
+  const iw = tools.getByRole('listitem').filter({ hasText: 'IW-0701' });
+  await expect(iw).toContainText('Asha Verma');
+  await expect(iw).toContainText('checked out offline');
+  await expect(iw).toContainText(/On track|Likely late|Loss risk|Overdue/);
+
+  const flag = page.getByRole('article', { name: /Unusual check-out of/ }).first();
+  await expect(flag).toContainText(/Checked out at|Planned for|First time with|Rarely uses/);
+  await flag.getByLabel('Note (optional)').fill('Night maintenance job, approved by the shift lead');
+  await flag.getByRole('button', { name: 'Looks fine' }).click();
+  await expect(page.getByText(/Marked as fine by Ravi Kumar.*Night maintenance job/).first()).toBeVisible();
+  await expectAccessible(page);
+  await shot(page, 'insights', { fullPage: true });
+});
+
 test('technicians cannot reach admin-only screens', async () => {
   const { page } = tech;
   await page.goto('/people');
   await expect(page.getByText('Only admins and auditors can see this page.')).toBeVisible();
   await page.goto('/audit');
   await expect(page.getByText('Only admins and auditors can see the audit trail.')).toBeVisible();
+  await page.goto('/insights');
+  await expect(page.getByText('Only crib staff and auditors can see insights.')).toBeVisible();
 });
 
 test('deactivating someone signs them out everywhere', async () => {

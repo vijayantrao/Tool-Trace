@@ -11,12 +11,19 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T>(
+  path: string,
+  init: { method?: string; body?: unknown; idempotencyKey?: string } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (init.body !== undefined) headers['content-type'] = 'application/json';
+  // Lets an offline action be sent again safely: the server applies it only once.
+  if (init.idempotencyKey) headers['idempotency-key'] = init.idempotencyKey;
   let res: Response;
   try {
     res = await fetch(`/api${path}`, {
       method: init.method ?? (init.body === undefined ? 'GET' : 'POST'),
-      headers: init.body === undefined ? undefined : { 'content-type': 'application/json' },
+      headers,
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       credentials: 'same-origin',
       cache: 'no-store',

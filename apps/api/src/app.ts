@@ -5,12 +5,14 @@ import { ApiError, errorResponse, notFound, toApiError } from './lib/errors.js';
 import { MemoryStore, rateLimit } from './lib/rate-limit.js';
 import { originGuard } from './middleware/security.js';
 import { requestTransaction } from './middleware/db.js';
+import { idempotency } from './middleware/idempotency.js';
 import { loadSession } from './middleware/session.js';
 import { auditRoutes } from './routes/audit.js';
 import { authRoutes } from './routes/auth.js';
 import { checkoutRoutes } from './routes/checkouts.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { eventRoutes } from './routes/events.js';
+import { insightRoutes } from './routes/insights.js';
 import { stationRoutes } from './routes/stations.js';
 import { toolRoutes } from './routes/tools.js';
 import { userRoutes } from './routes/users.js';
@@ -76,9 +78,11 @@ export function createApp(
   // row-level security and the audit trail seeing who is acting. Sign-in
   // (no identity yet) and the long-lived event stream are the exceptions.
   const inTransaction = requestTransaction(sql, config.TRUST_PROXY);
-  api.use('*', (c, next) =>
-    c.req.path.startsWith('/api/auth/') || c.req.path === '/api/events' ? next() : inTransaction(c, next),
-  );
+  const outsideTransactions = (path: string) => path.startsWith('/api/auth/') || path === '/api/events';
+  api.use('*', (c, next) => (outsideTransactions(c.req.path) ? next() : inTransaction(c, next)));
+  // Offline replays: an action sent again with the same Idempotency-Key happens only once.
+  const once = idempotency();
+  api.use('*', (c, next) => (outsideTransactions(c.req.path) ? next() : once(c, next)));
   api.route('/auth', authRoutes(deps));
   api.route('/', userRoutes(deps));
   api.route('/', toolRoutes(deps));
@@ -86,6 +90,7 @@ export function createApp(
   api.route('/', dashboardRoutes(deps));
   api.route('/', stationRoutes(deps));
   api.route('/', auditRoutes(deps));
+  api.route('/', insightRoutes(deps));
   api.route('/', eventRoutes(deps, input.sseHeartbeatMs));
   app.route('/api', api);
 

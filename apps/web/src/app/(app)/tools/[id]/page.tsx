@@ -5,10 +5,13 @@ import { useParams } from 'next/navigation';
 import { ArrowLeft, Lock, QrCode } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
 import { AssetTag, CalSticker, StatusTag, toolIcon } from '@/components/tool-visuals';
+import { DuePicker } from '@/components/due-picker';
 import { TagEditor } from '@/components/tag-editor';
 import { toast } from '@/components/toast';
 import { Button, ErrorNote, Field, Input, Panel, Select, Spinner } from '@/components/ui';
-import { errorText } from '@/lib/api';
+import { ApiError, errorText } from '@/lib/api';
+import { useOffline } from '@/lib/offline';
+import { newCheckoutItem } from '@/lib/outbox';
 import { formatDateTime, formatDay, relative, todayIso } from '@/lib/format';
 import { useCheckOut, useHolders, useRecordCalibration, useReturn, useSetToolTag, useTool, useUpdateToolStatus } from '@/lib/queries';
 import { can, useMe } from '@/lib/session';
@@ -70,31 +73,42 @@ export default function ToolPage() {
 
 /* ---------- Check out ---------- */
 
-const quickDue = [
-  { label: 'End of shift', hours: 8 },
-  { label: 'Tomorrow', hours: 24 },
-  { label: '3 days', hours: 72 },
-  { label: '1 week', hours: 168 },
-];
 
 function CheckOutPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
   const issue = can.issueToOthers(me.role);
   const holders = useHolders(issue);
   const checkOut = useCheckOut();
+  const offline = useOffline();
   const [hours, setHours] = useState(8);
   const [holderId, setHolderId] = useState(me.id);
   const [error, setError] = useState('');
   const due = useMemo(() => new Date(Date.now() + hours * 3_600_000), [hours]);
 
+  // No connection: save it on the phone and send it later (only for yourself).
+  async function saveOffline(): Promise<boolean> {
+    if (!offline || holderId !== me.id) {
+      setError('No connection. Issuing a tool to someone else needs a connection.');
+      return false;
+    }
+    await offline.queue(newCheckoutItem(me.id, tool.assetTag, hours));
+    toast(`Saved offline: ${tool.assetTag} will be checked out to you when you're back online`, 'info');
+    return true;
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    if (offline && !offline.online) {
+      await saveOffline();
+      return;
+    }
     try {
       await checkOut.mutateAsync({ toolId: tool.id, holderId, dueBackAt: due.toISOString() });
       const who = holderId === me.id ? 'you' : holders.data?.find((h) => h.id === holderId)?.displayName;
       toast(`Checked out ${tool.assetTag} to ${who}`);
     } catch (err) {
-      setError(errorText(err));
+      if (err instanceof ApiError && err.status === 0) await saveOffline();
+      else setError(errorText(err));
     }
   }
 
@@ -116,25 +130,7 @@ function CheckOutPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
             </Select>
           </Field>
         )}
-        <fieldset>
-          <legend className="mb-2 text-sm font-semibold">Due back</legend>
-          <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
-            {quickDue.map((q) => (
-              <button
-                type="button"
-                key={q.hours}
-                onClick={() => setHours(q.hours)}
-                aria-pressed={hours === q.hours}
-                className={`min-h-11 rounded-md px-3 text-sm font-semibold ${
-                  hours === q.hours ? 'bg-ink text-panel' : 'ring-1 ring-inset ring-line hover:ring-ink/40'
-                }`}
-              >
-                {q.label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-2 text-sm text-muted">Due {formatDateTime(due.toISOString())}</p>
-        </fieldset>
+        <DuePicker hours={hours} onChange={setHours} due={due} />
         <ErrorNote>{error}</ErrorNote>
         <Button type="submit" busy={checkOut.isPending} className="sm:self-start">
           Check out {tool.assetTag}
@@ -155,18 +151,40 @@ const conditions: { value: ReturnCondition; label: string; hint: string }[] = [
 function HolderPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
   const c = tool.openCheckout!;
   const ret = useReturn();
+  const offline = useOffline();
   const [condition, setCondition] = useState<ReturnCondition>('ok');
   const [notes, setNotes] = useState('');
   const [error, setError] = useState('');
 
+  async function saveOffline() {
+    if (!offline) return;
+    await offline.queue({
+      id: crypto.randomUUID(),
+      userId: me.id,
+      kind: 'return',
+      assetTag: tool.assetTag,
+      checkoutId: c.id,
+      condition,
+      notes: notes.trim() || undefined,
+      queuedAt: new Date().toISOString(),
+      state: 'pending',
+    });
+    toast(`Saved offline: ${tool.assetTag} will be received when you're back online`, 'info');
+  }
+
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError('');
+    if (offline && !offline.online) {
+      await saveOffline();
+      return;
+    }
     try {
       await ret.mutateAsync({ id: c.id, condition, notes: notes.trim() || undefined });
       toast(condition === 'ok' ? `${tool.assetTag} is back on the board` : `${tool.assetTag} returned and quarantined`);
     } catch (err) {
-      setError(errorText(err));
+      if (err instanceof ApiError && err.status === 0) await saveOffline();
+      else setError(errorText(err));
     }
   }
 

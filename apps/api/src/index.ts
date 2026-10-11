@@ -41,6 +41,7 @@ const sweep = setInterval(() => {
   sql`DELETE FROM sessions WHERE expires_at < now()`.catch(() => {});
   sql`DELETE FROM webauthn_challenges WHERE expires_at < now()`.catch(() => {});
   sql`DELETE FROM station_events WHERE received_at < now() - interval '90 days'`.catch(() => {});
+  sql`DELETE FROM idempotency_keys WHERE created_at < now() - interval '7 days'`.catch(() => {});
 }, 10 * 60_000);
 sweep.unref();
 

@@ -15,3 +15,10 @@ playwright-report/
 # Local one-click launchers placed on a developer machine
 /RUN-*.cmd
 apps/api/.station-master-key
+
+# Python (ml/)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
