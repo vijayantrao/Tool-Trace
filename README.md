@@ -4,6 +4,9 @@
 
 [![CI](https://github.com/vijayantrao/Tool-Trace/actions/workflows/ci.yml/badge.svg)](https://github.com/vijayantrao/Tool-Trace/actions/workflows/ci.yml)
 [![Security](https://github.com/vijayantrao/Tool-Trace/actions/workflows/security.yml/badge.svg)](https://github.com/vijayantrao/Tool-Trace/actions/workflows/security.yml)
+[![Live demo](https://img.shields.io/badge/live_demo-tooltrace--vijayant.vercel.app-2563eb?logo=vercel)](https://tooltrace-vijayant.vercel.app)
+
+**[▶ Try the live demo](https://tooltrace-vijayant.vercel.app)**: pick a role (Admin, Storekeeper, Technician or Auditor) and look around. No sign-up; the fictional data resets every night. The free server sleeps when idle, so the first visit may take about a minute to wake it.
 
 On a real shop floor, tools go missing, get used past their calibration date, and nobody can say who had a torque wrench last Tuesday. Spreadsheets and paper logs can't enforce rules. ToolTrace makes those rules impossible to break:
 
@@ -14,7 +17,7 @@ On a real shop floor, tools go missing, get used past their calibration date, an
 - **It sees trouble coming.** A nightly Python model flags tools likely to come back late or go missing, and odd check-outs, with the reasons, for a person to act on.
 - **No signal on the shop floor? Keep working.** Check-outs made offline sync when the signal returns, exactly once.
 
-> Status: **all 6 phases complete**. Deployable for free in about 20 minutes: see [Deploy your own](#deploy-your-own-free).
+> Status: **all 6 phases complete** and [live](https://tooltrace-vijayant.vercel.app). Deployable for free in about 20 minutes: see [Deploy your own](#deploy-your-own-free).
 
 ## See it in 75 seconds
 
