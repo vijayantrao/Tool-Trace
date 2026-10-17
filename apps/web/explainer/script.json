@@ -1,0 +1,100 @@
+{
+  "voice": "en-IN-NeerjaNeural",
+  "rate": "-6%",
+  "beats": [
+    { "id": "intro1", "text": "Namaste! This video introduces ToolTrace: a smart system to track tools and their calibration on the factory floor." },
+    { "id": "intro2", "text": "You will see the problem it solves, how to use it step by step, its main features, and the benefits for your company." },
+
+    { "id": "prob0", "text": "First, the problem." },
+    { "id": "prob1", "text": "In most plants, tools are tracked in a paper register or an Excel sheet." },
+    { "id": "prob2", "text": "Tools go missing, and nobody can say who took the torque wrench last Tuesday." },
+    { "id": "prob3", "text": "A tool whose calibration has expired can still be used on a job, because nothing stops it. That is a quality risk." },
+    { "id": "prob4", "text": "Entries are made late, or not at all. And when an auditor asks for proof, someone spends hours searching through files." },
+    { "id": "prob5", "text": "Lost tools are bought again, and jobs wait while people search. All of this costs time and money." },
+
+    { "id": "sol1", "text": "ToolTrace replaces the register with one simple web app. It works on a computer at the tool crib, and on any phone on the shop floor." },
+    { "id": "sol2", "text": "Every tool gets a QR label, and if you like, an RFID tag. So the app always knows where each tool is, who has it, and when it is due back.", "say": "Every tool gets a QR label, and if you like, an R-F-I-D tag. So the app always knows where each tool is, who has it, and when it is due back." },
+    { "id": "sol3", "text": "There are four roles. The admin manages people and settings. The storekeeper runs the tool crib." },
+    { "id": "sol4", "text": "The technician takes tools for jobs. And the auditor can see everything, but cannot change anything." },
+
+    { "id": "use0", "text": "Now, let us see how to use it." },
+    { "id": "login1", "text": "This is the sign-in page. Real users sign in with a passkey: their fingerprint, face, or phone PIN. There are no passwords to forget or steal." },
+    { "id": "login2", "text": "This demo also has one-click roles. We will start as Ravi, the storekeeper." },
+
+    { "id": "board1", "text": "This is the tool board. It works like a shadow board on the wall: every tool has its own place." },
+    { "id": "board2", "text": "The top line shows how many tools are out, how many are overdue, and how many are locked." },
+    { "id": "board3", "text": "A solid card means the tool is in the crib. A dotted outline means it is out, and shows who has it and when it is due back." },
+    { "id": "board4", "text": "Overdue tools are marked in red. A small square in the corner warns that calibration is due soon, or has expired." },
+    { "id": "board5", "text": "With one click, you can see only the tools that need attention." },
+
+    { "id": "issue1", "text": "To issue a tool, the storekeeper opens it, and picks the person." },
+    { "id": "issue2", "text": "Then chooses when it should come back, and clicks Check out." },
+    { "id": "issue3", "text": "Done. The board now shows who has the tool. The time and the storekeeper's name are saved automatically." },
+
+    { "id": "ret1", "text": "When a tool comes back, the storekeeper opens it, and notes its condition: good, damaged, or needs calibration." },
+    { "id": "ret2", "text": "Here, the ratchet is slipping, so we mark it as damaged and click Receive." },
+    { "id": "ret3", "text": "A damaged tool is quarantined automatically. Nobody can take it until it is repaired and checked." },
+
+    { "id": "cal1", "text": "Now, calibration. This torque wrench is past its calibration date, so ToolTrace has locked it." },
+    { "id": "cal2", "text": "Not only the screen: the server and the database itself refuse to issue it. There is no way around this rule." },
+    { "id": "cal3", "text": "After the tool is calibrated, the storekeeper records who calibrated it, and the certificate number." },
+    { "id": "cal4", "text": "The tool is unlocked at once, and the next due date is set automatically." },
+
+    { "id": "tools1", "text": "The Tools page lists every tool. You can search by tag or name, and filter by status or calibration." },
+    { "id": "tools2", "text": "For example, here are all the tools whose calibration has expired, or is due soon." },
+    { "id": "tools3", "text": "Adding a new tool takes a few seconds. Then print its QR label, and stick it on the tool." },
+
+    { "id": "tech1", "text": "Now, the technician's view, on a phone. Asha signs in." },
+    { "id": "tech2", "text": "Her screen shows the tools she has, and when each one is due back." },
+    { "id": "tech3", "text": "To take a tool, she taps Scan, and points the camera at the QR label. She can also type the tag." },
+    { "id": "tech4", "text": "She chooses when she will return it, and taps Check out. It takes about ten seconds." },
+
+    { "id": "off1", "text": "Sometimes there is no network signal on the shop floor. ToolTrace keeps working." },
+    { "id": "off2", "text": "The check-out is saved on the phone." },
+    { "id": "off3", "text": "When the signal returns, it is sent automatically, exactly once. Nothing is lost, and nothing is counted twice." },
+
+    { "id": "sta1", "text": "For even faster work, the crib can have a smart station: a small RFID reader built on an ESP32 board.", "say": "For even faster work, the crib can have a smart station: a small R-F-I-D reader, built on an E S P 32 board." },
+    { "id": "sta2", "text": "The admin adds a station here. Each station gets its own secret key." },
+    { "id": "sta3", "text": "Now watch the board. Asha taps her ID badge at the station, and then taps the tool." },
+    { "id": "sta4", "text": "That's it. No typing at all. And every open screen updates live, at the same moment, without refreshing." },
+    { "id": "sta5", "text": "Every message from a station is digitally signed. A fake or altered message is rejected, and recorded." },
+
+    { "id": "ins1", "text": "Every night, a machine learning model studies all past check-outs." },
+    { "id": "ins2", "text": "For each tool that is out right now, it shows the risk of a late return or a loss, with the reasons in plain words." },
+    { "id": "ins3", "text": "It also flags unusual check-outs: for example, a tool taken at an odd hour, or kept for much longer than usual." },
+    { "id": "ins4", "text": "A person reviews each flag, and decides. The model only gives an early warning; it never blames anyone." },
+
+    { "id": "ppl1", "text": "The admin manages people. To add someone, enter their email and role, and click Create invite." },
+    { "id": "ppl2", "text": "Share the link or QR code. They create their passkey, and they are in." },
+    { "id": "ppl3", "text": "When someone leaves, one click deactivates them, and signs them out on every device." },
+
+    { "id": "aud1", "text": "Finally, the audit trail. Every action is recorded: who did what, and when." },
+    { "id": "aud2", "text": "Each record is sealed with a cryptographic hash of the one before, like links in a chain." },
+    { "id": "aud3", "text": "Click Verify integrity, and ToolTrace proves that no record was changed or deleted. Even the database owner cannot quietly rewrite history." },
+
+    { "id": "feat1", "text": "Here are the key features at a glance." },
+    { "id": "feat2", "text": "A live tool board. Check-out by QR code, RFID badge, or from the crib. A calibration lock. And offline mode.", "say": "A live tool board. Check-out by QR code, R-F-I-D badge, or from the crib. A calibration lock. And offline mode." },
+    { "id": "feat3", "text": "Smart stations. Nightly insights. Passkey sign-in with roles. And a tamper-proof audit trail." },
+
+    { "id": "adv0", "text": "So, how is this better than a register or an Excel sheet?" },
+    { "id": "adv1", "text": "With a register, you know where a tool is only if someone wrote it down. With ToolTrace, you know in real time." },
+    { "id": "adv2", "text": "A register cannot stop an expired tool from being used. ToolTrace blocks it." },
+    { "id": "adv3", "text": "A register can be changed, or lost. In ToolTrace, any change to a record is detected." },
+    { "id": "adv4", "text": "And a register only tells you the past. ToolTrace warns you early, before a tool goes late or missing." },
+
+    { "id": "ben0", "text": "Now, the key benefits for the company." },
+    { "id": "ben1", "text": "One. Fewer lost tools, and less money spent on replacing them." },
+    { "id": "ben2", "text": "Two. Better quality. Only calibrated tools reach the job, which supports quality standards and customer audits." },
+    { "id": "ben3", "text": "Three. Time saved. Issuing a tool takes seconds, and audit evidence is ready in minutes, not days." },
+    { "id": "ben4", "text": "Four. Clear accountability. At every moment, each tool has one named person responsible for it." },
+    { "id": "ben5", "text": "Five. Better decisions. Usage data shows which tools are in demand, and which are rarely used, to plan purchases wisely." },
+    { "id": "ben6", "text": "Six. Strong security. No passwords to steal, access based on roles, and records that cannot be faked." },
+    { "id": "ben7", "text": "And seven. Low cost. It runs in a browser on the computers and phones you already have, and the stations use low-cost parts." },
+
+    { "id": "start1", "text": "Getting started is simple." },
+    { "id": "start2", "text": "Step one: add your tools, and stick on the QR labels. Step two: invite your team." },
+    { "id": "start3", "text": "Step three: start with one tool crib as a pilot. Then, roll it out to the other areas of the plant." },
+
+    { "id": "end1", "text": "Thank you for watching! Try the live demo yourself at tooltrace-vijayant.vercel.app. Pick a role, and explore.", "say": "Thank you for watching! Try the live demo yourself, at: tool trace, dash, vijayant, dot vercel, dot app. Pick a role, and explore." }
+  ]
+}
