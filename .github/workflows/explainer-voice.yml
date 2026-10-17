@@ -1,0 +1,27 @@
+# Temporary: builds the explainer video's voice-over. Lives only on the explainer-voice branch.
+name: Explainer voice
+on:
+  push:
+    branches: [explainer-voice]
+    paths: ['explainer-voice/script.json', 'explainer-voice/tts.py', '.github/workflows/explainer-voice.yml']
+permissions:
+  contents: write
+jobs:
+  voice:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: pip install -q edge-tts==7.3.1 faster-whisper==1.2.1
+      - run: python explainer-voice/tts.py
+      - name: Save the audio on this branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add explainer-voice/audio explainer-voice/report.json
+          git commit -m "Explainer voice-over (generated)"
+          git push
