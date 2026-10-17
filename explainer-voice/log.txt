@@ -1,0 +1,76 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+intro1   10.18s 0.97  Namaste!  This video introduces tool trays, a smart system to track tools and their calibration  on the factory floor.
+intro2    8.81s 1.00  You will see the problem it solves, how to use it step by step, its main features and the benefits for your company.
+prob0     2.69s 1.00  First, the problem.
+prob1     5.88s 1.00  In most plants, tools are tracked in a paper register or an Excel sheet.
+prob2     5.86s 1.00  Tools go missing and nobody can say who took the torque wrench last Tuesday.
+prob3    10.08s 1.00  A tool whose calibration has expired can still be used on a job because nothing stops it.  That is a quality risk.
+prob4    10.15s 1.00  Entries are made late or not at all.  And when an auditor asks for proof, someone spends hours searching through files.
+prob5     8.54s 0.99  Lost tools are bought again and jobs wait while people search.  All of this costs time and money.
+sol1     11.11s 0.98  ToolTrays replaces the register with one simple web app.  It works on a computer at the tool crib and on any phone on the shop floor.
+sol2     12.31s 0.99  Every tool gets a QR label and if you like, an RFID tag.  So the app always knows where each tool is, who has it and when it is due back.
+sol3      9.12s 0.99  There are four roles.  The admin manages people and settings.  The storekeeper runs the tool crib.
+sol4      8.52s 0.99  The technician takes tools for jobs.  And the auditor can see everything but cannot change anything.
+use0      3.43s 1.00  Now, let us see how to use it.
+login1   13.10s 0.99  This is the sign-in page.  Real users sign in with a passkey, their fingerprint, face or phone pin.  There are no passwords to forget or steal.
+login2    7.42s 0.99  This demo also has one-click roles.  We will start as Ravi, the storekeeper.
+board1    8.28s 0.99  This is the tool board.  It works like a shadow board on the wall.  Every tool has its own place.
+board2    7.25s 1.00  The top line shows how many tools are out, how many are overdue and how many are locked.
+board3    9.72s 1.00  A solid card means the tool is in the crib.  A dotted outline means it is out and shows who has it and when it is due back.
+board4    9.65s 1.00  Overdue tools are marked in red.  A small square in the corner warns that calibration is due soon or has expired.
+board5    5.16s 1.00  With one click, you can see only the tools that need attention.
+issue1    5.52s 1.00  To issue a tool, the storekeeper opens it and picks the person.
+issue2    4.80s 0.99  then chooses when it should come back and clicks Checkout.
+issue3    9.43s 0.99  Done!  The board now shows who has the tool.  The time and the storekeeper's name are saved automatically.
+ret1      9.41s 1.00  When a tool comes back, the storekeeper opens it and notes its condition, good, damaged, or needs calibration.
+ret2      6.24s 1.00  Here, the ratchet is slipping, so we mark it as damaged and click receive.
+ret3      8.21s 0.99  A damage tool is quarantined automatically.  Nobody can take it until it is repaired and checked.
+cal1      8.71s 0.93  Now, Calibration.  This stock wrench is past its calibration date, so tool trays has locked it.
+cal2      9.46s 1.00  Not only the screen, the server and the database itself refuse to issue it.  There is no way around this rule.
+cal3      7.73s 1.00  After the tool is calibrated, the storekeeper records who calibrated it and the certificate number.
+cal4      5.98s 1.00  The tool is unlocked at once and the next due date is set automatically.
+tools1    9.19s 0.99  The tools page lists every tool.  You can search by tag or name and filter by status or calibration.
+tools2    7.54s 1.00  For example, here are the tools whose calibration is due soon so they can be planned in time.
+tools3    7.94s 0.99  Adding a new tool takes a few seconds.  Then print its QR label and stick it on the tool.
+tech1     6.34s 0.99  Now the technicians view on a phone.  Asha signs in.
+tech2     5.52s 1.00  Her screen shows the tools she has and when each one is due back.
+tech3     8.90s 0.99  To take a tool, she taps Scan and points the camera at the QR label.  She can also type the tag.
+tech4     7.61s 0.96  She chooses when she will return it and taps checkout.  It takes about 10 seconds.
+off1      7.37s 0.99  Sometimes there is no network signal on the shop floor.  Tool trace keeps working.
+off2      3.07s 0.99  The checkout is saved on the phone.
+off3     10.01s 1.00  When the signal returns, it is sent automatically exactly once.  Nothing is lost and nothing is counted twice.
+sta1      9.77s 0.96  For even faster work, the Crip can have a smart station, a small RFID reader built on an ESP32 board.
+sta2      6.84s 0.99  The admin adds a station here.  Each station gets its own secret key.
+sta3      7.63s 0.99  Now watch the board.  Asha taps her ID badge at the station and then taps the tool.
+sta4     10.66s 0.99  That's it. No typing at all.  And every open screen updates live at the same moment without refreshing.
+sta5      8.93s 0.99  Every message from a station is digitally signed.  A fake or altered message is rejected and recorded.
+ins1      5.69s 0.99  Every night, a machine learning model studies all past checkouts.
+ins2      8.52s 1.00  For each tool that is out right now, it shows the risk of a late return or a loss with the reasons in plain words.
+ins3      9.67s 0.96  It also flags unusual checkouts, for example, a tool taken at a node R or kept for much longer than usual.
+ins4      9.65s 0.99  A person reviews each flag and decides.  The model only gives an early warning.  It never blames anyone.
+ppl1      8.62s 0.99  The admin manages people.  To add someone, enter their email and role and click Create invite.
+ppl2      6.86s 0.99  Share the link or QR code.  They create their passkey and they are in.
+ppl3      6.91s 1.00  When someone leaves, one click deactivates them and signs them out on every device.
+aud1      7.78s 0.99  Finally, the audit trail.  Every action is recorded who did what and when.
+aud2      6.67s 1.00  Each record is sealed with a cryptographic hash of the one before, like links in a chain.
+aud3     11.90s 1.00  Click Verify Integrity and tool trace proves that no record was changed or deleted.  Even the database owner cannot quietly rewrite history.
+feat1     3.48s 1.00  Here are the key features at a glance.
+feat2    12.53s 0.97  A live tool board.  Check out by QR code, RFID badge or from the crib.  A calibration lock.  And offline mode.
+feat3    10.46s 0.90  Smart stations  Nightly insights  Pascy sign-in withdrawals  And a tamper-proof audit trail
+adv0      4.92s 1.00  So, how is this better than a register or an excel sheet?
+adv1      9.48s 1.00  With a register, you know where a tool is only if someone wrote it down.  With tool trace, you know in real time.
+adv2      7.39s 0.99  A register cannot stop an expired tool from being used.  Tool trace blocks it.
+adv3      8.33s 0.99  A register can be changed or lost.  In Tool Trace, any change to a record is detected.
+adv4      8.81s 1.00  and a register only tells you the past.  Tool trace warns you early before a tool goes late or missing.
+ben0      3.70s 1.00  Now, the key benefits for the company.
+ben1      6.55s 0.97  1. Fewer lost tools and less money spent on replacing them.
+ben2     10.82s 0.98  2. Better Quality  Only calibrated tools reach the job, which supports quality standards and customer audits.
+ben3      9.91s 0.96  3. Time saved.  Issuing a tool takes seconds and audit evidence is ready in minutes, not days.
+ben4      9.82s 0.97  4. Clear accountability.  At every moment, each tool has one named person responsible for it.
+ben5     11.69s 0.97  5. Better Decisions  Usage data shows which tools are in demand and which are rarely used to plan purchases wisely.
+ben6     10.99s 0.97  6. Strong Security  No passwords to steal, access based on roles, and records that cannot be faked.
+ben7     11.26s 0.97  And 7. Low cost.  It runs in a browser on the computers and phones you already have and the stations use low cost parts.
+start1    2.78s 1.00  Getting started is simple.
+start2    8.62s 0.94  Step 1, add your tools and stick on the QR labels.  Step 2, invite your team.
+start3    9.36s 0.96  Step 3, Start with one tool crib as a pilot.  Then, roll it out to the other areas of the plant.
+end1     13.27s 0.89  Thank you for watching.  Try the live demo yourself at  tooltrace-vigandh.vercel.app  Pick a role and explore.

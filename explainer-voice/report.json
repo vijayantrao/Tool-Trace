@@ -1,0 +1,377 @@
+{
+ "intro1": {
+  "duration": 10.176,
+  "heard": "Namaste!  This video introduces tool trays, a smart system to track tools and their calibration  on the factory floor.",
+  "match": 0.974
+ },
+ "intro2": {
+  "duration": 8.808,
+  "heard": "You will see the problem it solves, how to use it step by step, its main features and the benefits for your company.",
+  "match": 1.0
+ },
+ "prob0": {
+  "duration": 2.688,
+  "heard": "First, the problem.",
+  "match": 1.0
+ },
+ "prob1": {
+  "duration": 5.88,
+  "heard": "In most plants, tools are tracked in a paper register or an Excel sheet.",
+  "match": 1.0
+ },
+ "prob2": {
+  "duration": 5.856,
+  "heard": "Tools go missing and nobody can say who took the torque wrench last Tuesday.",
+  "match": 1.0
+ },
+ "prob3": {
+  "duration": 10.08,
+  "heard": "A tool whose calibration has expired can still be used on a job because nothing stops it.  That is a quality risk.",
+  "match": 0.996
+ },
+ "prob4": {
+  "duration": 10.152,
+  "heard": "Entries are made late or not at all.  And when an auditor asks for proof, someone spends hours searching through files.",
+  "match": 0.996
+ },
+ "prob5": {
+  "duration": 8.544,
+  "heard": "Lost tools are bought again and jobs wait while people search.  All of this costs time and money.",
+  "match": 0.995
+ },
+ "sol1": {
+  "duration": 11.112,
+  "heard": "ToolTrays replaces the register with one simple web app.  It works on a computer at the tool crib and on any phone on the shop floor.",
+  "match": 0.977
+ },
+ "sol2": {
+  "duration": 12.312,
+  "heard": "Every tool gets a QR label and if you like, an RFID tag.  So the app always knows where each tool is, who has it and when it is due back.",
+  "match": 0.985
+ },
+ "sol3": {
+  "duration": 9.12,
+  "heard": "There are four roles.  The admin manages people and settings.  The storekeeper runs the tool crib.",
+  "match": 0.989
+ },
+ "sol4": {
+  "duration": 8.52,
+  "heard": "The technician takes tools for jobs.  And the auditor can see everything but cannot change anything.",
+  "match": 0.995
+ },
+ "use0": {
+  "duration": 3.432,
+  "heard": "Now, let us see how to use it.",
+  "match": 1.0
+ },
+ "login1": {
+  "duration": 13.104,
+  "heard": "This is the sign-in page.  Real users sign in with a passkey, their fingerprint, face or phone pin.  There are no passwords to forget or steal.",
+  "match": 0.993
+ },
+ "login2": {
+  "duration": 7.416,
+  "heard": "This demo also has one-click roles.  We will start as Ravi, the storekeeper.",
+  "match": 0.993
+ },
+ "board1": {
+  "duration": 8.28,
+  "heard": "This is the tool board.  It works like a shadow board on the wall.  Every tool has its own place.",
+  "match": 0.989
+ },
+ "board2": {
+  "duration": 7.248,
+  "heard": "The top line shows how many tools are out, how many are overdue and how many are locked.",
+  "match": 1.0
+ },
+ "board3": {
+  "duration": 9.72,
+  "heard": "A solid card means the tool is in the crib.  A dotted outline means it is out and shows who has it and when it is due back.",
+  "match": 0.996
+ },
+ "board4": {
+  "duration": 9.648,
+  "heard": "Overdue tools are marked in red.  A small square in the corner warns that calibration is due soon or has expired.",
+  "match": 0.995
+ },
+ "board5": {
+  "duration": 5.16,
+  "heard": "With one click, you can see only the tools that need attention.",
+  "match": 1.0
+ },
+ "issue1": {
+  "duration": 5.52,
+  "heard": "To issue a tool, the storekeeper opens it and picks the person.",
+  "match": 1.0
+ },
+ "issue2": {
+  "duration": 4.8,
+  "heard": "then chooses when it should come back and clicks Checkout.",
+  "match": 0.991
+ },
+ "issue3": {
+  "duration": 9.432,
+  "heard": "Done!  The board now shows who has the tool.  The time and the storekeeper's name are saved automatically.",
+  "match": 0.99
+ },
+ "ret1": {
+  "duration": 9.408,
+  "heard": "When a tool comes back, the storekeeper opens it and notes its condition, good, damaged, or needs calibration.",
+  "match": 1.0
+ },
+ "ret2": {
+  "duration": 6.24,
+  "heard": "Here, the ratchet is slipping, so we mark it as damaged and click receive.",
+  "match": 1.0
+ },
+ "ret3": {
+  "duration": 8.208,
+  "heard": "A damage tool is quarantined automatically.  Nobody can take it until it is repaired and checked.",
+  "match": 0.989
+ },
+ "cal1": {
+  "duration": 8.712,
+  "heard": "Now, Calibration.  This stock wrench is past its calibration date, so tool trays has locked it.",
+  "match": 0.934
+ },
+ "cal2": {
+  "duration": 9.456,
+  "heard": "Not only the screen, the server and the database itself refuse to issue it.  There is no way around this rule.",
+  "match": 0.995
+ },
+ "cal3": {
+  "duration": 7.728,
+  "heard": "After the tool is calibrated, the storekeeper records who calibrated it and the certificate number.",
+  "match": 1.0
+ },
+ "cal4": {
+  "duration": 5.976,
+  "heard": "The tool is unlocked at once and the next due date is set automatically.",
+  "match": 1.0
+ },
+ "tools1": {
+  "duration": 9.192,
+  "heard": "The tools page lists every tool.  You can search by tag or name and filter by status or calibration.",
+  "match": 0.995
+ },
+ "tools2": {
+  "duration": 7.536,
+  "heard": "For example, here are the tools whose calibration is due soon so they can be planned in time.",
+  "match": 1.0
+ },
+ "tools3": {
+  "duration": 7.944,
+  "heard": "Adding a new tool takes a few seconds.  Then print its QR label and stick it on the tool.",
+  "match": 0.994
+ },
+ "tech1": {
+  "duration": 6.336,
+  "heard": "Now the technicians view on a phone.  Asha signs in.",
+  "match": 0.99
+ },
+ "tech2": {
+  "duration": 5.52,
+  "heard": "Her screen shows the tools she has and when each one is due back.",
+  "match": 1.0
+ },
+ "tech3": {
+  "duration": 8.904,
+  "heard": "To take a tool, she taps Scan and points the camera at the QR label.  She can also type the tag.",
+  "match": 0.995
+ },
+ "tech4": {
+  "duration": 7.608,
+  "heard": "She chooses when she will return it and taps checkout.  It takes about 10 seconds.",
+  "match": 0.957
+ },
+ "off1": {
+  "duration": 7.368,
+  "heard": "Sometimes there is no network signal on the shop floor.  Tool trace keeps working.",
+  "match": 0.994
+ },
+ "off2": {
+  "duration": 3.072,
+  "heard": "The checkout is saved on the phone.",
+  "match": 0.986
+ },
+ "off3": {
+  "duration": 10.008,
+  "heard": "When the signal returns, it is sent automatically exactly once.  Nothing is lost and nothing is counted twice.",
+  "match": 0.995
+ },
+ "sta1": {
+  "duration": 9.768,
+  "heard": "For even faster work, the Crip can have a smart station, a small RFID reader built on an ESP32 board.",
+  "match": 0.96
+ },
+ "sta2": {
+  "duration": 6.84,
+  "heard": "The admin adds a station here.  Each station gets its own secret key.",
+  "match": 0.992
+ },
+ "sta3": {
+  "duration": 7.632,
+  "heard": "Now watch the board.  Asha taps her ID badge at the station and then taps the tool.",
+  "match": 0.994
+ },
+ "sta4": {
+  "duration": 10.656,
+  "heard": "That's it. No typing at all.  And every open screen updates live at the same moment without refreshing.",
+  "match": 0.995
+ },
+ "sta5": {
+  "duration": 8.928,
+  "heard": "Every message from a station is digitally signed.  A fake or altered message is rejected and recorded.",
+  "match": 0.995
+ },
+ "ins1": {
+  "duration": 5.688,
+  "heard": "Every night, a machine learning model studies all past checkouts.",
+  "match": 0.992
+ },
+ "ins2": {
+  "duration": 8.52,
+  "heard": "For each tool that is out right now, it shows the risk of a late return or a loss with the reasons in plain words.",
+  "match": 1.0
+ },
+ "ins3": {
+  "duration": 9.672,
+  "heard": "It also flags unusual checkouts, for example, a tool taken at a node R or kept for much longer than usual.",
+  "match": 0.962
+ },
+ "ins4": {
+  "duration": 9.648,
+  "heard": "A person reviews each flag and decides.  The model only gives an early warning.  It never blames anyone.",
+  "match": 0.99
+ },
+ "ppl1": {
+  "duration": 8.616,
+  "heard": "The admin manages people.  To add someone, enter their email and role and click Create invite.",
+  "match": 0.994
+ },
+ "ppl2": {
+  "duration": 6.864,
+  "heard": "Share the link or QR code.  They create their passkey and they are in.",
+  "match": 0.993
+ },
+ "ppl3": {
+  "duration": 6.912,
+  "heard": "When someone leaves, one click deactivates them and signs them out on every device.",
+  "match": 1.0
+ },
+ "aud1": {
+  "duration": 7.776,
+  "heard": "Finally, the audit trail.  Every action is recorded who did what and when.",
+  "match": 0.993
+ },
+ "aud2": {
+  "duration": 6.672,
+  "heard": "Each record is sealed with a cryptographic hash of the one before, like links in a chain.",
+  "match": 1.0
+ },
+ "aud3": {
+  "duration": 11.904,
+  "heard": "Click Verify Integrity and tool trace proves that no record was changed or deleted.  Even the database owner cannot quietly rewrite history.",
+  "match": 0.996
+ },
+ "feat1": {
+  "duration": 3.48,
+  "heard": "Here are the key features at a glance.",
+  "match": 1.0
+ },
+ "feat2": {
+  "duration": 12.528,
+  "heard": "A live tool board.  Check out by QR code, RFID badge or from the crib.  A calibration lock.  And offline mode.",
+  "match": 0.971
+ },
+ "feat3": {
+  "duration": 10.464,
+  "heard": "Smart stations  Nightly insights  Pascy sign-in withdrawals  And a tamper-proof audit trail",
+  "match": 0.9
+ },
+ "adv0": {
+  "duration": 4.92,
+  "heard": "So, how is this better than a register or an excel sheet?",
+  "match": 1.0
+ },
+ "adv1": {
+  "duration": 9.48,
+  "heard": "With a register, you know where a tool is only if someone wrote it down.  With tool trace, you know in real time.",
+  "match": 0.995
+ },
+ "adv2": {
+  "duration": 7.392,
+  "heard": "A register cannot stop an expired tool from being used.  Tool trace blocks it.",
+  "match": 0.993
+ },
+ "adv3": {
+  "duration": 8.328,
+  "heard": "A register can be changed or lost.  In Tool Trace, any change to a record is detected.",
+  "match": 0.994
+ },
+ "adv4": {
+  "duration": 8.808,
+  "heard": "and a register only tells you the past.  Tool trace warns you early before a tool goes late or missing.",
+  "match": 0.995
+ },
+ "ben0": {
+  "duration": 3.696,
+  "heard": "Now, the key benefits for the company.",
+  "match": 1.0
+ },
+ "ben1": {
+  "duration": 6.552,
+  "heard": "1. Fewer lost tools and less money spent on replacing them.",
+  "match": 0.966
+ },
+ "ben2": {
+  "duration": 10.824,
+  "heard": "2. Better Quality  Only calibrated tools reach the job, which supports quality standards and customer audits.",
+  "match": 0.977
+ },
+ "ben3": {
+  "duration": 9.912,
+  "heard": "3. Time saved.  Issuing a tool takes seconds and audit evidence is ready in minutes, not days.",
+  "match": 0.962
+ },
+ "ben4": {
+  "duration": 9.816,
+  "heard": "4. Clear accountability.  At every moment, each tool has one named person responsible for it.",
+  "match": 0.967
+ },
+ "ben5": {
+  "duration": 11.688,
+  "heard": "5. Better Decisions  Usage data shows which tools are in demand and which are rarely used to plan purchases wisely.",
+  "match": 0.974
+ },
+ "ben6": {
+  "duration": 10.992,
+  "heard": "6. Strong Security  No passwords to steal, access based on roles, and records that cannot be faked.",
+  "match": 0.974
+ },
+ "ben7": {
+  "duration": 11.256,
+  "heard": "And 7. Low cost.  It runs in a browser on the computers and phones you already have and the stations use low cost parts.",
+  "match": 0.97
+ },
+ "start1": {
+  "duration": 2.784,
+  "heard": "Getting started is simple.",
+  "match": 1.0
+ },
+ "start2": {
+  "duration": 8.616,
+  "heard": "Step 1, add your tools and stick on the QR labels.  Step 2, invite your team.",
+  "match": 0.94
+ },
+ "start3": {
+  "duration": 9.36,
+  "heard": "Step 3, Start with one tool crib as a pilot.  Then, roll it out to the other areas of the plant.",
+  "match": 0.963
+ },
+ "end1": {
+  "duration": 13.272,
+  "heard": "Thank you for watching.  Try the live demo yourself at  tooltrace-vigandh.vercel.app  Pick a role and explore.",
+  "match": 0.894
+ }
+}
