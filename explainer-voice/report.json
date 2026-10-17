@@ -1,7 +1,7 @@
 {
  "intro1": {
   "duration": 10.176,
-  "heard": "Namaste!  This video introduces tool trays, a smart system to track tools and their calibration  on the factory floor.",
+  "heard": "Namaste!  This video introduces tool trays, a smart system to track tools and their calibration on the  factory floor.",
   "match": 0.974
  },
  "intro2": {
@@ -31,8 +31,8 @@
  },
  "prob4": {
   "duration": 10.152,
-  "heard": "Entries are made late or not at all.  And when an auditor asks for proof, someone spends hours searching through files.",
-  "match": 0.996
+  "heard": "Entries are made late or not at all.  And when an auditor asks for proof,  someone spends hours searching through files.",
+  "match": 0.991
  },
  "prob5": {
   "duration": 8.544,
@@ -56,7 +56,7 @@
  },
  "sol4": {
   "duration": 8.52,
-  "heard": "The technician takes tools for jobs.  And the auditor can see everything but cannot change anything.",
+  "heard": "The technician takes tools for jobs  and the auditor can see everything but cannot change anything.",
   "match": 0.995
  },
  "use0": {
@@ -181,7 +181,7 @@
  },
  "tech4": {
   "duration": 7.608,
-  "heard": "She chooses when she will return it and taps checkout.  It takes about 10 seconds.",
+  "heard": "She chooses when she will return it and taps Checkout.  It takes about 10 seconds.",
   "match": 0.957
  },
  "off1": {
@@ -216,7 +216,7 @@
  },
  "sta4": {
   "duration": 10.656,
-  "heard": "That's it. No typing at all.  And every open screen updates live at the same moment without refreshing.",
+  "heard": "That's it! No typing at all.  And every open screen updates live at the same moment without refreshing.",
   "match": 0.995
  },
  "sta5": {
@@ -235,9 +235,9 @@
   "match": 1.0
  },
  "ins3": {
-  "duration": 9.672,
-  "heard": "It also flags unusual checkouts, for example, a tool taken at a node R or kept for much longer than usual.",
-  "match": 0.962
+  "duration": 9.936,
+  "heard": "It also flags unusual checkouts, for example, a tool taken in the middle of the night or  kept much longer than usual.",
+  "match": 0.991
  },
  "ins4": {
   "duration": 9.648,
@@ -285,9 +285,9 @@
   "match": 0.971
  },
  "feat3": {
-  "duration": 10.464,
-  "heard": "Smart stations  Nightly insights  Pascy sign-in withdrawals  And a tamper-proof audit trail",
-  "match": 0.9
+  "duration": 11.664,
+  "heard": "Smart stations  Nightly insights  Pascy sign-in with a role for each person  and a tamper-proof audit trail.",
+  "match": 0.967
  },
  "adv0": {
   "duration": 4.92,
@@ -336,13 +336,13 @@
  },
  "ben4": {
   "duration": 9.816,
-  "heard": "4. Clear accountability.  At every moment, each tool has one named person responsible for it.",
+  "heard": "4. Clear accountability  At every moment, each tool has one named person responsible for it.",
   "match": 0.967
  },
  "ben5": {
   "duration": 11.688,
-  "heard": "5. Better Decisions  Usage data shows which tools are in demand and which are rarely used to plan purchases wisely.",
-  "match": 0.974
+  "heard": "5. Better Decisions.  Usage data shows which tools are in demand  and which are rarely used to plan purchases wisely.",
+  "match": 0.969
  },
  "ben6": {
   "duration": 10.992,
@@ -351,7 +351,7 @@
  },
  "ben7": {
   "duration": 11.256,
-  "heard": "And 7. Low cost.  It runs in a browser on the computers and phones you already have and the stations use low cost parts.",
+  "heard": "And 7. Low cost  It runs in a browser on the computers and phones you already have and the stations use low cost parts.",
   "match": 0.97
  },
  "start1": {
@@ -366,8 +366,8 @@
  },
  "start3": {
   "duration": 9.36,
-  "heard": "Step 3, Start with one tool crib as a pilot.  Then, roll it out to the other areas of the plant.",
-  "match": 0.963
+  "heard": "Step 3. Start with one tool crib as a pilot. Then roll it out to the other areas of the plant.",
+  "match": 0.968
  },
  "end1": {
   "duration": 13.272,
