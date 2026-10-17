@@ -194,7 +194,7 @@
   },
   {
    "id": "ins3",
-   "text": "It also flags unusual check-outs: for example, a tool taken at an odd hour, or kept for much longer than usual."
+   "text": "It also flags unusual check-outs: for example, a tool taken in the middle of the night, or kept much longer than usual."
   },
   {
    "id": "ins4",
@@ -235,7 +235,7 @@
   },
   {
    "id": "feat3",
-   "text": "Smart stations. Nightly insights. Passkey sign-in with roles. And a tamper-proof audit trail."
+   "text": "Smart stations. Nightly insights. Passkey sign-in, with a role for each person. And a tamper-proof audit trail."
   },
   {
    "id": "adv0",
