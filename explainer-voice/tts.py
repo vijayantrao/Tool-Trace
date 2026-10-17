@@ -34,6 +34,7 @@ async def main():
 
 asyncio.run(main())
 
+import numpy as np
 from faster_whisper import WhisperModel
 
 model = WhisperModel("small.en", device="cpu", compute_type="int8")
@@ -42,7 +43,9 @@ report = {}
 for beat in script["beats"]:
     path = out / f"{beat['id']}.mp3"
     dur = float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)]))
-    heard = " ".join(s.text for s in model.transcribe(str(path), beam_size=1)[0]).strip()
+    pcm = subprocess.check_output(["ffmpeg", "-v", "error", "-i", str(path), "-f", "s16le", "-ac", "1", "-ar", "16000", "-"])
+    audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768
+    heard = " ".join(s.text for s in model.transcribe(audio, beam_size=1)[0]).strip()
     score = SequenceMatcher(None, norm(spoken(beat)), norm(heard)).ratio()
     report[beat["id"]] = {"duration": round(dur, 3), "heard": heard, "match": round(score, 3)}
     print(f"{beat['id']:8} {dur:5.2f}s {score:.2f}  {heard}")
