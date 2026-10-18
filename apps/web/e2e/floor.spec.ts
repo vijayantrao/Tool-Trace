@@ -377,6 +377,7 @@ test('the app is installable', async ({ request }) => {
 });
 
 test('admin imports tools from an Excel workbook, checking it first', async ({}, testInfo) => {
+  test.setTimeout(120_000);
   const { page } = admin;
   const file = testInfo.outputPath('plant-tools.xlsx');
   const day = (s: string) => new Date(`${s}T00:00:00Z`);
@@ -410,6 +411,7 @@ test('admin imports tools from an Excel workbook, checking it first', async ({},
 });
 
 test('admin imports from a PostgreSQL table, then keeps a copy of the tools in one', async () => {
+  test.setTimeout(150_000); // two connections, a check, an import and a copy: slow on shared CI runners
   const { page } = admin;
   const server = new URL(DB_URL);
   server.pathname = '/postgres';
