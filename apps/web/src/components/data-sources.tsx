@@ -178,7 +178,10 @@ function Steps({ steps, at }: { steps: string[]; at: number }) {
 
 export function WizardFrame({ title, kind, onClose, children }: { title: string; kind: SourceKind; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
-  useEffect(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), []);
+  // Braces matter: newer browsers return a Promise from scrollIntoView, and React would call it as a cleanup.
+  useEffect(() => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
   return (
     <section ref={ref} aria-label={title} className="mb-10 scroll-mt-6 rounded-xl border border-line bg-panel">
       <header className="flex items-center gap-3 border-b border-line px-5 py-4">

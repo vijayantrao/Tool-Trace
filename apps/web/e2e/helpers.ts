@@ -62,8 +62,17 @@ export async function acceptInvite(page: Page, inviteUrl: string, name: string) 
   // The token must be wiped from the address bar once read.
   await expect(page).toHaveURL(/\/accept-invite$/);
   await page.getByLabel('Your name').fill(name);
+  const errors: string[] = [];
+  const onError = (e: Error) => errors.push(e.message);
+  page.on('pageerror', onError);
   await page.getByRole('button', { name: 'Create passkey and sign in' }).click();
-  await expect(page.getByRole('heading', { name: 'Tool board' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tool board' }))
+    .toBeVisible({ timeout: 15_000 })
+    .catch(async (err) => {
+      // Say what the browser saw: CI artifacts aren't always at hand.
+      throw new Error(`${(err as Error).message}\nAt ${page.url()}. Page errors: ${errors.join(' | ') || 'none'}\n${(await page.locator('body').ariaSnapshot()).slice(0, 2500)}`);
+    })
+    .finally(() => page.off('pageerror', onError));
 }
 
 export async function expectAccessible(page: Page) {
