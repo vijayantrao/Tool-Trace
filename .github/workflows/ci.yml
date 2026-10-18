@@ -38,8 +38,36 @@ jobs:
           --health-interval 3s
           --health-timeout 3s
           --health-retries 20
+      # Outside databases for the data-source connectors (import and copy tables).
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: Mysql-test-1
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pMysql-test-1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 30
+      mssql:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: 'Y'
+          MSSQL_SA_PASSWORD: Mssql-test-Passw0rd
+        ports:
+          - 1433:1433
+        options: >-
+          --health-cmd "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P Mssql-test-Passw0rd -Q 'SELECT 1' || exit 1"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+          --health-start-period 20s
     env:
       TEST_DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5432/postgres
+      TEST_MYSQL_URL: mysql://root:Mysql-test-1@127.0.0.1:3306
+      TEST_MYSQL_TLS: require
+      TEST_MSSQL_URL: mssql://sa:Mssql-test-Passw0rd@127.0.0.1:1433
       # Also runs the shared-rate-limit tests against a real Redis.
       REDIS_TEST_URL: redis://localhost:6379
     steps:

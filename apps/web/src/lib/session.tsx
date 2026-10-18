@@ -30,6 +30,7 @@ export const can = {
   managePeople: (r?: Role) => r === 'admin',
   seeStations: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
   manageStations: (r?: Role) => r === 'admin',
+  manageData: (r?: Role) => r === 'admin',
   seeAudit: (r?: Role) => r === 'admin' || r === 'auditor',
   seeInsights: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
   reviewAnomalies: (r?: Role) => r === 'admin' || r === 'storekeeper',

@@ -52,6 +52,19 @@ const schema = z.object({
   STATION_CHECKOUT_HOURS: z.coerce.number().int().min(1).max(72).default(8),
   /** How long a badge tap stays valid while the person taps their tools. */
   STATION_SESSION_SECONDS: z.coerce.number().int().min(5).max(300).default(30),
+
+  // --- Data sources (optional) -----------------------------------------------
+  /**
+   * Encrypts saved database passwords (AES-256-GCM). 32+ random bytes, hex or base64.
+   * Without it, Excel/CSV imports still work but database connections are switched off.
+   */
+  DATA_SOURCE_KEY: z.string().min(43).optional(),
+  /**
+   * Allow connections to private and loopback addresses (10.x, 192.168.x, localhost...).
+   * Off by default, so the server can't be used to probe its own network. Turn it on for
+   * an on-premises install whose databases live on the factory network.
+   */
+  DATA_SOURCES_ALLOW_PRIVATE: bool.default(false),
 });
 
 export type Config = z.infer<typeof schema>;

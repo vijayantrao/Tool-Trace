@@ -1,10 +1,8 @@
 import type { Metadata, Viewport } from 'next';
-import '@fontsource/barlow/400.css';
-import '@fontsource/barlow/500.css';
-import '@fontsource/barlow/600.css';
-import '@fontsource/barlow-condensed/500.css';
-import '@fontsource/barlow-condensed/600.css';
-import '@fontsource/barlow-condensed/700.css';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource/ibm-plex-sans/700.css';
 import './globals.css';
 import { Providers } from './providers';
 

@@ -7,7 +7,14 @@ import type {
   AuditVerification,
   Insights,
   Checkout,
+  ConnectionInput,
+  DataSourcesInfo,
+  DateOrder,
   Dashboard,
+  ImportResult,
+  Mapping,
+  RunOutcome,
+  Schedule,
   Holder,
   Invite,
   Location,
@@ -34,6 +41,7 @@ export const keys = {
   stationEvents: ['station-events'] as const,
   audit: (action: string) => ['audit', action] as const,
   insights: ['insights'] as const,
+  dataSources: ['data-sources'] as const,
 };
 
 const qs = (q: Record<string, string>) => {
@@ -254,3 +262,68 @@ export function useReviewAnomaly() {
       Promise.all([qc.invalidateQueries({ queryKey: keys.insights }), qc.invalidateQueries({ queryKey: keys.dashboard })]),
   });
 }
+
+// ---- Data sources --------------------------------------------------------
+export const useDataSources = (enabled: boolean) =>
+  useQuery({ queryKey: keys.dataSources, queryFn: () => api<DataSourcesInfo>('/data-sources'), enabled });
+
+/** Anything that may have changed tools also refreshes the board and the tool lists. */
+function useDataMutation<V, R>(fn: (v: V) => Promise<R>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: keys.dataSources });
+      void qc.invalidateQueries({ queryKey: ['tools'] });
+      void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.locations });
+    },
+  });
+}
+
+export interface FileImportBody {
+  fileName: string;
+  fileKind: 'excel' | 'csv';
+  dateOrder: DateOrder;
+  dryRun: boolean;
+  rows: { row: number; values: Record<string, string | number | boolean | null> }[];
+}
+
+export const useFileImport = () =>
+  useDataMutation((body: FileImportBody) => api<{ result: ImportResult }>('/data-sources/files/import', { body }));
+
+export const browseDatabase = (connection: ConnectionInput) =>
+  api<{ tables: string[] }>('/data-sources/browse', { body: { connection } });
+
+export const browseTable = (connection: ConnectionInput, table: string) =>
+  api<{ columns: { name: string; type: string }[]; preview: Record<string, unknown>[]; suggested: Mapping }>(
+    '/data-sources/browse/table',
+    { body: { connection, table } },
+  );
+
+export const previewDatabaseImport = (body: { connection: ConnectionInput; table: string; mapping: Mapping; dateOrder: DateOrder }) =>
+  api<{ result: ImportResult }>('/data-sources/preview', { body });
+
+export const useCreateDataSource = () =>
+  useDataMutation(
+    (body: {
+      name: string;
+      mode: 'import' | 'mirror';
+      connection: ConnectionInput;
+      table: string;
+      mapping?: Mapping;
+      dateOrder: DateOrder;
+      schedule: Schedule;
+    }) => api<{ id: string; run: RunOutcome }>('/data-sources', { body }),
+  );
+
+export const useSyncDataSource = () =>
+  useDataMutation((id: string) => api<{ run: RunOutcome }>(`/data-sources/${id}/sync`, { method: 'POST', body: {} }));
+
+export const useUpdateDataSource = () =>
+  useDataMutation(({ id, ...body }: { id: string; name?: string; schedule?: Schedule; password?: string }) =>
+    api<{ ok: true }>(`/data-sources/${id}`, { method: 'PATCH', body }),
+  );
+
+export const useRemoveDataSource = () =>
+  useDataMutation((id: string) => api<{ ok: true }>(`/data-sources/${id}`, { method: 'DELETE' }));

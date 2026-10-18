@@ -273,3 +273,111 @@ export interface Insights {
   atRisk: AtRiskCheckout[];
   anomalies: Anomaly[];
 }
+
+// ---- Data sources --------------------------------------------------------
+export type DbKind = 'mysql' | 'postgres' | 'mssql';
+export type SourceKind = 'excel' | 'csv' | DbKind;
+export type TlsMode = 'verify' | 'require' | 'off';
+export type Schedule = 'manual' | 'hourly' | 'daily';
+export type DateOrder = 'dmy' | 'mdy';
+export type FieldKey = 'assetTag' | 'name' | 'category' | 'location' | 'calibrationIntervalDays' | 'lastCalibratedOn' | 'rfidUid';
+export type Mapping = Partial<Record<FieldKey, string>>;
+
+export interface ToolField {
+  key: FieldKey;
+  label: string;
+  required: boolean;
+  hint: string;
+  synonyms: string[];
+}
+
+export interface DataSource {
+  id: string;
+  name: string;
+  kind: DbKind;
+  mode: 'import' | 'mirror';
+  host: string;
+  port: number;
+  databaseName: string;
+  username: string;
+  tls: TlsMode;
+  tableName: string | null;
+  mapping: { fields?: Mapping; dateOrder?: DateOrder };
+  schedule: Schedule;
+  nextSyncAt: string | null;
+  lastSyncAt: string | null;
+  lastSyncOk: boolean | null;
+  lastSyncMessage: string | null;
+  createdAt: string;
+}
+
+export interface SyncRun {
+  id: string;
+  sourceId: string | null;
+  sourceLabel: string;
+  kind: SourceKind;
+  direction: 'import' | 'mirror';
+  trigger: 'manual' | 'schedule';
+  ok: boolean;
+  summary: {
+    message?: string;
+    rows?: number;
+    created?: number;
+    updated?: number;
+    unchanged?: number;
+    skipped?: number;
+    calibrationsRecorded?: number;
+    locationsCreated?: number;
+    problems?: number;
+    copied?: number;
+  };
+  at: string;
+  runByName: string;
+}
+
+export interface DataSourcesInfo {
+  sources: DataSource[];
+  runs: SyncRun[];
+  fields: ToolField[];
+  capabilities: {
+    databases: { enabled: boolean; reason?: string };
+    maxFileRows: number;
+    defaultPorts: Record<DbKind, number>;
+  };
+}
+
+export interface ImportProblem {
+  row: number;
+  assetTag: string | null;
+  level: 'error' | 'warning';
+  message: string;
+}
+
+export interface ImportResult {
+  rows: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  skipped: number;
+  calibrationsRecorded: number;
+  locationsCreated: string[];
+  problems: ImportProblem[];
+  changes: { row: number; assetTag: string; action: 'create' | 'update'; fields: string[] }[];
+}
+
+export interface RunOutcome {
+  ok: boolean;
+  message: string;
+  import?: ImportResult;
+  copied?: number;
+}
+
+export interface ConnectionInput {
+  kind: DbKind;
+  host: string;
+  port?: number;
+  database: string;
+  username: string;
+  password: string;
+  tls: TlsMode;
+}

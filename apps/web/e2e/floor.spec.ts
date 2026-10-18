@@ -5,6 +5,8 @@
  * damaged, quarantines it, recalibrates it, and access is revoked.
  */
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import postgres from 'postgres';
+import writeXlsxFile from 'write-excel-file/node';
 import { DB_URL, MQTT_PORT } from '../playwright.config';
 import {
   acceptInvite,
@@ -372,4 +374,91 @@ test('the app is installable', async ({ request }) => {
   expect(manifest.icons.some((i: { sizes: string }) => i.sizes === '512x512')).toBe(true);
   expect((await request.get('/sw.js')).ok()).toBe(true);
   expect((await request.get('/offline')).ok()).toBe(true);
+});
+
+test('admin imports tools from an Excel workbook, checking it first', async ({}, testInfo) => {
+  const { page } = admin;
+  const file = testInfo.outputPath('plant-tools.xlsx');
+  const day = (s: string) => new Date(`${s}T00:00:00Z`);
+  await writeXlsxFile(
+    [
+      ['Tool No', 'Description', 'Type', 'Store', 'Cal Interval', 'Last Cal Date'],
+      ['TW-0301', 'Torque Wrench 2-10 Nm', 'Torque', 'Assembly Bay 3', 180, day(new Date(Date.now() - 20 * 864e5).toISOString().slice(0, 10))],
+      ['GG-0302', 'Feeler Gauge Set', 'Measuring', 'Assembly Bay 3', null, null],
+      ['bad tag', 'Broken row', 'Misc', null, null, null],
+    ],
+    { dateFormat: 'dd/mm/yyyy' },
+  ).toFile(file);
+
+  await page.goto('/data');
+  await expect(page.getByRole('heading', { name: 'Data sources' })).toBeVisible();
+  await page.getByRole('button', { name: /Excel workbook.*Connect existing/ }).click();
+  await page.getByLabel('Spreadsheet file').setInputFiles(file);
+  await expect(page.getByText(/plant-tools.xlsx · 3 rows/)).toBeVisible();
+  await expectAccessible(page);
+  await page.getByRole('button', { name: 'Check 3 rows' }).click();
+  const check = page.getByRole('region', { name: 'Check results' });
+  await expect(check).toContainText('Checked 3 rows. Nothing has changed yet.');
+  await expect(check).toContainText(/Asset tag "bad tag" must be/);
+  await shot(page, 'data-sources-check', { fullPage: true });
+  await page.getByRole('button', { name: 'Import 2 tools' }).click();
+  await expect(page.getByRole('region', { name: 'Import results' })).toBeVisible();
+
+  await page.goto('/t/TW-0301');
+  await expect(page.getByRole('heading', { name: 'Torque Wrench 2-10 Nm' })).toBeVisible();
+  await expect(page.getByText(/kept at Assembly Bay 3/)).toBeVisible();
+});
+
+test('admin imports from a PostgreSQL table, then keeps a copy of the tools in one', async () => {
+  const { page } = admin;
+  const server = new URL(DB_URL);
+  server.pathname = '/postgres';
+  const root = postgres(server.toString(), { max: 1, onnotice: () => {} });
+  await root.unsafe('DROP DATABASE IF EXISTS tooltrace_e2e_source WITH (FORCE)');
+  await root.unsafe('CREATE DATABASE tooltrace_e2e_source');
+  const srcUrl = new URL(DB_URL);
+  srcUrl.pathname = '/tooltrace_e2e_source';
+  const src = postgres(srcUrl.toString(), { max: 1, onnotice: () => {} });
+  await src.unsafe(`CREATE TABLE "Tool Master" ("Asset No" text, "Tool Name" text, "Category" text)`);
+  await src.unsafe(`INSERT INTO "Tool Master" VALUES ('HM-0401', 'Rubber Mallet', 'Hand Tools'), ('HM-0402', 'Dead Blow Hammer', 'Hand Tools')`);
+
+  const connect = async () => {
+    await page.getByLabel('Server', { exact: true }).fill(server.hostname);
+    await page.getByLabel('Port', { exact: true }).fill(server.port || '5432');
+    await page.getByLabel('Database', { exact: true }).fill('tooltrace_e2e_source');
+    await page.getByLabel('User name', { exact: true }).fill(decodeURIComponent(server.username));
+    await page.getByLabel('Password', { exact: true }).fill(decodeURIComponent(server.password));
+    await page.getByLabel('Encryption', { exact: true }).selectOption('off');
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await expect(page.getByText(/Connected to tooltrace_e2e_source/)).toBeVisible();
+  };
+
+  try {
+    await page.goto('/data');
+    await page.getByRole('button', { name: /PostgreSQL.*Connect existing/ }).click();
+    await connect();
+    await page.getByLabel('Table', { exact: true }).selectOption('Tool Master');
+    await expect(page.getByRole('table')).toContainText('Dead Blow Hammer');
+    await page.getByRole('button', { name: 'Check the table' }).click();
+    await expect(page.getByRole('region', { name: 'Check results' })).toContainText('Checked 2 rows');
+    await page.getByRole('button', { name: 'Save and import' }).click();
+    await expect(page.getByRole('region', { name: 'Import from PostgreSQL' }).getByText(/^2 added, 0 updated, 0 unchanged$/)).toBeVisible();
+
+    await page.getByRole('tab', { name: /Create a new data source/ }).click();
+    await page.getByRole('button', { name: /PostgreSQL.*Create new/ }).click();
+    await connect();
+    await page.getByRole('button', { name: 'Create table and copy tools' }).click();
+    await expect(page.getByRole('region', { name: 'Create a ToolTrace table in PostgreSQL' }).getByText(/^Copied \d+ tools to tooltrace_tools$/)).toBeVisible();
+    const [copy] = await src<{ n: number }[]>`SELECT count(*)::int AS n FROM tooltrace_tools WHERE asset_tag IN ('HM-0401', 'TW-0301', 'TW-0101')`;
+    expect(copy?.n).toBe(3);
+
+    const saved = page.getByRole('region', { name: 'Database connections' }).getByRole('listitem');
+    await expect(saved).toHaveCount(2);
+    await expectAccessible(page);
+    await shot(page, 'data-sources', { fullPage: true });
+  } finally {
+    await src.end();
+    await root.unsafe('DROP DATABASE IF EXISTS tooltrace_e2e_source WITH (FORCE)');
+    await root.end();
+  }
 });

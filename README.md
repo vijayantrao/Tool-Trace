@@ -16,6 +16,7 @@ On a real shop floor, tools go missing, get used past their calibration date, an
 - **Nobody can quietly rewrite history.** Every change lands in a hash-chained audit trail that even the database owner can't edit without it showing.
 - **It sees trouble coming.** A nightly Python model flags tools likely to come back late or go missing, and odd check-outs, with the reasons, for a person to act on.
 - **No signal on the shop floor? Keep working.** Check-outs made offline sync when the signal returns, exactly once.
+- **Start from the data you already have.** Import the tool list from an Excel workbook, a CSV file or a MySQL, PostgreSQL or SQL Server table (once or on a schedule), or have ToolTrace create and keep a copy table in your database for reports. Like Power Apps' "Start with data", but every imported row still passes the calibration lock and lands in the audit trail.
 
 > Status: **all 6 phases complete** and [live](https://tooltrace-vijayant.vercel.app). Deployable for free in about 20 minutes: see [Deploy your own](#deploy-your-own-free).
 
@@ -99,6 +100,29 @@ Tool cribs are often signal dead zones. With no connection, a technician can sti
 
 Every change is **live**: the board, tool pages and checkouts update on every open screen within a moment, whether the change came from a phone, a station, or another browser. Database triggers send `NOTIFY` only when a transaction commits, so screens never show a change that was rolled back, and any number of API instances stay in sync.
 
+## Data sources: Excel, CSV, MySQL, PostgreSQL, SQL Server
+
+Admins open **Data sources** and choose, as in Power Apps, between two starts:
+
+| Connect existing data | Create a new data source |
+|---|---|
+| **Excel workbook or CSV file**: pick the file, match its columns to ToolTrace's fields (guessed from the header names), check, import. The file is read in the browser; only the matched values reach the server. | **Excel workbook**: a ready-made workbook with the right columns, frozen headers and a "how to fill this in" sheet, empty or filled with the current tools. Fill it in, then import it back. |
+| **MySQL, PostgreSQL or SQL Server table**: connect, pick a table, match columns, check, save. Import again by hand, every hour or every day. | **MySQL, PostgreSQL or SQL Server table**: ToolTrace creates a `tooltrace_tools` table and refreshes it with every tool, where it is, who has it and its calibration state. For Power BI and other reports. |
+
+![Checking an Excel import before anything changes](docs/screenshots/data-sources-check.png)
+
+ToolTrace's own database stays the record, so importing never weakens the rules:
+
+- **Check first.** Every import runs for real inside a transaction that is then rolled back, so the preview ("4 will be added, 1 updated, 2 skipped, and why") is exactly what will happen.
+- **Matched by asset tag; nothing is ever deleted.** Each row runs in its own savepoint: a bad row is reported and skipped, the rest still import.
+- **No back door around the calibration lock.** A newer "last calibrated" date becomes a proper calibration record, credited to the import. Calibration intervals and "needs calibration" are only taken when a tool is first added, so a spreadsheet can't quietly unlock an expired tool, and quarantined tools stay quarantined.
+- **Audited like a change by hand.** Imports run as the signed-in admin under row-level security; every created or changed tool, every connection and every run is in the hash-chained audit trail.
+- **Database passwords are encrypted** (AES-256-GCM, key outside the database, bound to its connection) and never sent back to the browser.
+- **The server can't be turned against its own network.** Host names are resolved once and checked: cloud metadata and link-local addresses are always refused, private networks only when `DATA_SOURCES_ALLOW_PRIVATE` is set for an on-premises install, and the connection goes to exactly the checked address while TLS still verifies the real host name. Table and column names must match what the server itself listed.
+- **Outside databases are never waited on while holding the audit lock**: reading happens first, then one short write transaction applies and records the result.
+
+On the public demo, Excel and CSV imports work; database connections are switched off.
+
 ---
 
 ## Architecture
@@ -152,6 +176,7 @@ Everything shown is built. Phase 6 deploys it to the free tiers named in bracket
 | Security scanning | **CodeQL** (TypeScript + C++), **gitleaks**, **OWASP ZAP**, **Grype**, `npm audit`, Dependabot | Every push and weekly; scanners pinned by version and SHA-256 checksum |
 | Machine learning | **Python 3.13**, scikit-learn, pandas, psycopg 3 | Logistic regression vs gradient boosting (time-split selection), Isolation Forest, Bayesian overdue update, per-score explanations |
 | Offline | IndexedDB outbox, service worker, **idempotency keys** | Check-outs survive no signal and apply exactly once |
+| Data sources | read-excel-file / write-excel-file and Papa Parse (in the browser), **mysql2**, **postgres.js**, **mssql** (tedious), AES-256-GCM | Import from Excel, CSV, MySQL, PostgreSQL and SQL Server, or keep a copy table; tested against real MySQL 8.4 and SQL Server 2022 in CI |
 
 ## Security design
 
@@ -226,6 +251,12 @@ All routes live under `/api` and return JSON. Errors always look like `{ "error"
 | GET | `/audit/verify?anchorId=&anchorHash=` | Admin, Auditor | Recompute the hash chain; optionally check a saved anchor |
 | GET | `/insights` | Admin, Storekeeper, Auditor | Latest model run and metrics, every tool out with its risk and reasons, unusual check-outs |
 | POST | `/anomalies/:id/review` | Admin, Storekeeper | Mark an unusual check-out "confirmed" or "dismissed", with a note |
+| GET | `/data-sources` | Admin | Saved database connections, recent imports and copies, the importable fields |
+| POST | `/data-sources/files/import` | Admin | Import mapped rows from an Excel/CSV file (`dryRun: true` to check first) |
+| POST | `/data-sources/browse`, `/data-sources/browse/table` | Admin | List a database's tables; columns, first rows and a suggested mapping |
+| POST | `/data-sources/preview` | Admin | Check an import from a database table without changing anything |
+| POST / PATCH / DELETE | `/data-sources`, `/data-sources/:id` | Admin | Save a connection (import from a table, or create a copy table), change its schedule or password, remove it |
+| POST | `/data-sources/:id/sync` | Admin | Import or copy now |
 
 Any `POST`, `PATCH` or `DELETE` may carry an `Idempotency-Key: <uuid>` header. Sending it again returns the first answer (with `Idempotent-Replayed: true`) without doing anything twice. `POST /checkouts` also accepts `queuedAt` for check-outs made offline.
 
@@ -354,6 +385,7 @@ scripts/windows/        one-click launch and test scripts
 - [x] **Phase 4: Hardening.** Hash-chained tamper-evident audit log, Redis rate limiting, Postgres row-level security, CodeQL, gitleaks, OWASP ZAP, STRIDE threat model
 - [x] **Phase 5: Intelligence.** Python ML for late-return and loss risk, anomaly detection, offline sync
 - [x] **Phase 6: Launch.** Free-tier deployment, demo accounts, demo video
+- [x] **Data sources.** Import from Excel, CSV, MySQL, PostgreSQL and SQL Server, or keep a copy table; Excel template
 
 ---
 

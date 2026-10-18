@@ -1,6 +1,7 @@
 import type { Config } from './config.js';
 import type { Sql, TxSql } from './db.js';
 import type { LimiterStore } from './lib/rate-limit.js';
+import type { DataSources } from './services/data-sources/sync.js';
 import type { FloorEvents } from './stations/floor-events.js';
 import type { StationGateway } from './stations/gateway.js';
 
@@ -23,6 +24,8 @@ export interface Deps {
   events?: FloorEvents;
   /** Rate-limit counters (memory or Redis). */
   limiter: LimiterStore;
+  /** Imports from and copies to outside data sources. */
+  dataSources?: DataSources;
 }
 
 export interface AppEnv {

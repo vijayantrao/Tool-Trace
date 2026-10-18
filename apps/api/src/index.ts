@@ -5,6 +5,7 @@ import { loadConfig } from './config.js';
 import { createDb } from './db.js';
 import { isDemoDatabase, resetDemo } from './demo/demo.js';
 import { createLimiterStore } from './lib/rate-limit.js';
+import { DataSources } from './services/data-sources/sync.js';
 import { FloorEvents } from './stations/floor-events.js';
 import { StationGateway } from './stations/gateway.js';
 import { connectGateway, startDevBroker } from './stations/mqtt.js';
@@ -27,7 +28,9 @@ if (config.DEMO_MODE) console.warn('[demo] DEMO MODE: one-click personas are ena
 const events = await new FloorEvents(sql).start();
 const gateway = new StationGateway(sql, config);
 const limiter = await createLimiterStore(config.REDIS_URL);
-const app = createApp({ sql, config, gateway, events, limiter });
+const dataSources = new DataSources(sql, config);
+const app = createApp({ sql, config, gateway, events, limiter, dataSources });
+console.log(`[data-sources] database connections ${dataSources.databases.enabled ? 'on' : `off: ${dataSources.databases.reason}`}`);
 
 // Smart stations: optional. Needs a master key, plus a broker (real, or the built-in dev one).
 let stopBroker: (() => Promise<void>) | undefined;
@@ -59,12 +62,25 @@ const sweep = setInterval(() => {
 }, 10 * 60_000);
 sweep.unref();
 
+// Scheduled imports and copies (hourly/daily data sources).
+let syncing = false;
+const scheduled = setInterval(() => {
+  if (syncing) return;
+  syncing = true;
+  dataSources
+    .runDue()
+    .catch((err) => console.error('[data-sources] scheduled sync failed', err))
+    .finally(() => (syncing = false));
+}, 5 * 60_000);
+scheduled.unref();
+
 const server = serve({ fetch: app.fetch, port: config.PORT }, (info) => {
   console.log(`[api] ToolTrace API listening on :${info.port} (${config.NODE_ENV})`);
 });
 
 const shutdown = async () => {
   server.close();
+  clearInterval(scheduled);
   await mqttClient?.endAsync().catch(() => {});
   await stopBroker?.().catch(() => {});
   await events.stop().catch(() => {});

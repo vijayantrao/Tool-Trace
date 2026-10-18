@@ -110,6 +110,9 @@ Each row names the defense, where it is implemented, and the test that proves it
 | A key is reused to smuggle in a different action | Each key is bound to a SHA-256 of method, path and body; a mismatch is refused (422). Keys are per person and expire after 7 days | `middleware/idempotency.ts` | "refuses to reuse a key for a different request", "keys belong to one person" |
 | A phone claims a false time for an offline check-out | Server time stays authoritative (`checked_out_at`). The phone's time is stored separately and bounded (not in the future, at most 24 h old) in the API **and** by a database CHECK | `routes/checkouts.ts`, `004_intelligence.sql` | "records when an offline check-out really happened, within limits" |
 | The phone wrongly decides a tool is free while offline | Nothing is decided offline: every rule (availability, calibration, roles) runs on the server at sync, and a refusal is shown to the person | `lib/offline.tsx` | e2e "…sync when the signal returns" (a conflicting offline check-out is refused) |
+| An import used to unlock an expired tool or slip changes past the rules | Imports run as the signed-in admin under RLS and column grants, row by row through the same database checks and audit triggers. A newer calibration date becomes a calibration record credited to the import; intervals and "needs calibration" can't be changed by an import; nothing is deleted; quarantine is never released | `services/data-sources/import.ts` | `data-sources.test.ts` "can never unlock an expired tool…" |
+| SQL injection through table or column names from an outside database | Names must match the server's own listing (information_schema), then are quoted for that dialect; values are always parameters | `services/data-sources/connectors.ts` | `data-source-connectors.test.ts` "refuses tables it did not list" |
+| ToolTrace overwrites someone else's table when creating a copy | A copy table is only written if it has ToolTrace's exact columns; otherwise the request is refused | `ensureMirrorTable()` | "never overwrites someone else's table" (MySQL, PostgreSQL, SQL Server) |
 | The ML job, or its credentials, used to change records | `tooltrace_ml` reads only the columns it learns from and writes only its own result tables; it can't update check-outs or call the audit writer | `004_intelligence.sql` | `ml/tests/test_database.py` "ml role reads only what it learns from" |
 
 ### R: Repudiation ("I never did that")
@@ -135,6 +138,10 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Error messages leak internals | One generic error envelope; unexpected errors are logged server-side and returned as a plain 500 | `lib/errors.ts` |
 | Invite token in server logs | Token sits in the URL fragment, which browsers never send; it's wiped from the address bar once read | e2e invite test |
 | Spectre-style side-channel reads by another site | Cross-origin isolation: `Cross-Origin-Opener-Policy`, `Cross-Origin-Resource-Policy` and `Cross-Origin-Embedder-Policy` on every page | e2e security headers test, ZAP rule 90004 |
+| Saved database passwords leak (database dump, API response, audit trail) | AES-256-GCM with a key outside the database (`DATA_SOURCE_KEY`), bound to its connection id as associated data, so it can't be moved to another connection. Never returned by any route; the audit trail records only "password changed" | `data-sources.test.ts`, `data-source-connectors.test.ts` "never shows the password again" |
+| **SSRF**: an admin (or the public demo's admin persona) makes the server connect into its own network | Hosts are resolved once and every address checked: link-local/cloud metadata and "this host" always refused; private and loopback ranges refused unless `DATA_SOURCES_ALLOW_PRIVATE`; the socket goes to exactly the checked address (no DNS rebinding) while TLS verifies the typed host name. Database connections are off in demo mode, and rate-limited | `data-sources.test.ts`, "will not connect to the server's own network" |
+| A malicious spreadsheet attacks the server (zip bomb, XML tricks) | Files are parsed in the admin's browser; the API only accepts validated JSON rows (size- and count-limited) | `lib/spreadsheet.ts` |
+| Formula injection in a generated workbook | Values are written as typed cells (text, number, date), never as formulas | `lib/spreadsheet.ts` |
 | Shared tablet shows a previous user's data | Service worker never caches `/api`; `Cache-Control: no-store` | e2e |
 | Risk scores about people leak to colleagues | Scores, flags and model runs are readable by admins, storekeepers and auditors only, by row-level security. Technicians never see scores, not even their own | `intelligence.test.ts` "never shows technicians scores…" |
 | The ML job reads personal data it doesn't need | Column-level grants: no names, emails, notes, passkeys or audit log. Person ids are never model inputs | `ml/tests/test_database.py` |
@@ -150,7 +157,8 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Limits reset by restarting or bypassed by hitting another replica | Counters in **Redis** (atomic Lua script), shared by all API instances |
 | Redis outage takes the crib offline | The limiter **fails open** with a throttled warning (see residual risks) |
 | A station floods MQTT | Per-station token bucket; excess messages are dropped and logged |
-| Huge request bodies | 64 KB body limit; zod limits on every string and array |
+| Huge request bodies | 64 KB body limit (4 MB for a file import's rows); zod limits on every string and array |
+| A slow outside database stalls the crib | Outside databases are never contacted while holding the audit lock; 10 s connect and 30 s query timeouts; at most 10,000 rows read; 30 connection attempts per admin per minute |
 | Many long-lived event streams | Streams need a valid session, re-checked every heartbeat |
 
 ### E: Elevation of privilege
@@ -182,7 +190,9 @@ Being honest about these is part of the design.
 11. **The offline outbox is stored unencrypted on the phone** (IndexedDB: asset tags, due times, the person's id; the last signed-in person's id and name in localStorage for the offline page). No tokens or passwords are stored, and signing out clears it, but anyone holding an unlocked phone can read it.
 12. **The nightly job's secret is an owner-level connection string** in GitHub Actions secrets. The job drops to `tooltrace_ml` immediately, but a leaked secret is owner access. Production should use a dedicated login role that is a member of `tooltrace_ml` only.
 13. **The public demo runs on free hosting**: the API sleeps when idle, and live event streams through the Vercel proxy end after 5 minutes (the browser reconnects automatically). Fine for a demo; a real deployment should use always-on hosting.
-14. **Model risks** (synthetic training data, feedback loops, fairness, data poisoning by people shaping their own history) are covered in the [model card](ML.md). Mitigations: staff-only, explained, audited, never automatic.
+14. **A copy table is as private as the database it lives in.** It holds tool names, locations and who has each tool. Grant access to it on purpose.
+15. **Scheduled syncs act as the admin who set them up**, and pause automatically if that person is deactivated or demoted. They run only while the API is running (on sleeping free hosting, that is "whenever it is awake").
+16. **Model risks** (synthetic training data, feedback loops, fairness, data poisoning by people shaping their own history) are covered in the [model card](ML.md). Mitigations: staff-only, explained, audited, never automatic.
 
 ## 5. How this is verified continuously
 

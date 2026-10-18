@@ -39,6 +39,9 @@ services:
         generateValue: true
       - key: STATION_MASTER_KEY
         generateValue: true
+      # Encrypts saved database passwords for data sources (database connections stay off in demo mode).
+      - key: DATA_SOURCE_KEY
+        generateValue: true
       # The public demo: one-click personas on a database that only ever holds fictional data.
       # Remove for a real deployment.
       - key: DEMO_MODE

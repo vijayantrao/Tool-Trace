@@ -11,3 +11,10 @@ paths = [
   '''^firmware/station/test/vectors\.json$''',
   '''^firmware/station/test/host/vectors\.h$''',
 ]
+
+[[allowlists]]
+description = "Throwaway passwords of the CI-only MySQL and SQL Server test containers"
+regexes = [
+  '''Mysql-test-1''',
+  '''Mssql-test-Passw0rd''',
+]

@@ -11,19 +11,22 @@ import { loadSession } from './middleware/session.js';
 import { auditRoutes } from './routes/audit.js';
 import { authRoutes } from './routes/auth.js';
 import { checkoutRoutes } from './routes/checkouts.js';
+import { dataSourceRoutes } from './routes/data-sources.js';
 import { dashboardRoutes } from './routes/dashboard.js';
 import { eventRoutes } from './routes/events.js';
 import { insightRoutes } from './routes/insights.js';
 import { stationRoutes } from './routes/stations.js';
 import { toolRoutes } from './routes/tools.js';
 import { userRoutes } from './routes/users.js';
+import { DataSources } from './services/data-sources/sync.js';
 import { StationGateway } from './stations/gateway.js';
 import type { AppEnv, Deps } from './types.js';
 
 export function createApp(
-  input: Omit<Deps, 'gateway' | 'limiter'> & {
+  input: Omit<Deps, 'gateway' | 'limiter' | 'dataSources'> & {
     gateway?: Deps['gateway'];
     limiter?: Deps['limiter'];
+    dataSources?: Deps['dataSources'];
     sseHeartbeatMs?: number;
   },
 ) {
@@ -31,6 +34,7 @@ export function createApp(
     ...input,
     gateway: input.gateway ?? new StationGateway(input.sql, input.config),
     limiter: input.limiter ?? new MemoryStore(),
+    dataSources: input.dataSources ?? new DataSources(input.sql, input.config),
   };
   const { sql, config } = deps;
   const app = new Hono<AppEnv>();
@@ -49,13 +53,11 @@ export function createApp(
     await next();
     c.header('Cache-Control', 'no-store');
   });
-  app.use(
-    '*',
-    bodyLimit({
-      maxSize: 64 * 1024,
-      onError: (c) => errorResponse(c, new ApiError(413, 'payload_too_large', 'Request body too large')),
-    }),
-  );
+  // Small bodies everywhere, except a spreadsheet's worth of rows for a file import.
+  const tooLarge = (c: Context) => errorResponse(c, new ApiError(413, 'payload_too_large', 'Request body too large'));
+  const smallBody = bodyLimit({ maxSize: 64 * 1024, onError: tooLarge });
+  const fileBody = bodyLimit({ maxSize: 4 * 1024 * 1024, onError: tooLarge });
+  app.use('*', (c, next) => (c.req.path === '/api/data-sources/files/import' ? fileBody(c, next) : smallBody(c, next)));
   app.use('*', originGuard(config.RP_ORIGINS));
 
   // Deployed behind the web app's proxy: refuse direct calls from the internet. This also makes
@@ -95,8 +97,9 @@ export function createApp(
   // Public facts the sign-in page needs before anyone is signed in (and a cheap way to wake a sleeping server).
   api.get('/meta', (c) => c.json({ name: config.RP_NAME, demo: config.DEMO_MODE }));
 
+  // Data sources may wait on an outside database, so they run their own short transactions.
   const outsideTransactions = (path: string) =>
-    path.startsWith('/api/auth/') || path === '/api/events' || path === '/api/meta';
+    path.startsWith('/api/auth/') || path === '/api/events' || path === '/api/meta' || path.startsWith('/api/data-sources');
   api.use('*', (c, next) => (outsideTransactions(c.req.path) ? next() : inTransaction(c, next)));
   // Offline replays: an action sent again with the same Idempotency-Key happens only once.
   const once = idempotency();
@@ -109,6 +112,7 @@ export function createApp(
   api.route('/', stationRoutes(deps));
   api.route('/', auditRoutes(deps));
   api.route('/', insightRoutes(deps));
+  api.route('/', dataSourceRoutes(deps));
   api.route('/', eventRoutes(deps, input.sseHeartbeatMs));
   app.route('/api', api);
 

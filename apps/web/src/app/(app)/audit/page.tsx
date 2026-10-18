@@ -21,7 +21,7 @@ const FILTERS: { value: string; label: string }[] = [
   { value: 'location.', label: 'Locations' },
   { value: 'anomaly.', label: 'Unusual check-outs' },
   { value: 'ml.', label: 'Model runs' },
-  { value: 'data.', label: 'Data imports' },
+  { value: 'data.', label: 'Data sources and imports' },
 ];
 
 export default function AuditPage() {
@@ -240,6 +240,10 @@ function describeChanges(changes: unknown): string {
           return 'home location changed';
         case 'category':
           return `category ${str(from)} → ${str(to)}`;
+        case 'schedule':
+          return `schedule ${str(from)} → ${str(to)}`;
+        case 'mapping':
+          return 'column matching changed';
         default:
           return `${field} changed`;
       }
@@ -295,6 +299,18 @@ function describe(e: AuditEntry): string {
       return `Nightly model run failed: ${str(d.error)}`;
     case 'data.imported':
       return `Imported ${str(d.checkouts)} check-outs (${str(d.kind)})`;
+    case 'data.source_added':
+      return `Added data source ${str(d.name)}: ${d.mode === 'import' ? 'imports from' : 'copies to'} ${str(d.table)} in ${str(d.database)} on ${str(d.host)}`;
+    case 'data.source_updated':
+      return `Data source ${str(d.name)}: ${describeChanges(d.changes)}`;
+    case 'data.source_removed':
+      return `Removed data source ${str(d.name)}`;
+    case 'data.tools_imported':
+    case 'data.tools_copied': {
+      const s = (d.summary ?? {}) as Record<string, unknown>;
+      const what = e.action === 'data.tools_imported' ? `Imported tools from ${str(d.source)}` : `Copied tools to ${str(d.source)}`;
+      return `${what}${d.trigger === 'schedule' ? ' (scheduled)' : ''}: ${d.ok ? str(s.message) : `failed, ${str(s.message)}`}`;
+    }
     default:
       return e.action;
   }

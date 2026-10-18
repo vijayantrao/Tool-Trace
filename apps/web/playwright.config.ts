@@ -18,6 +18,9 @@ const apiEnv = {
   // Smart stations: test-only master key and the API's built-in development broker.
   STATION_MASTER_KEY: 'a1'.repeat(32),
   DEV_MQTT_BROKER_PORT: String(MQTT_PORT),
+  // Data sources: a test-only key, and the e2e database server counts as an "outside" database.
+  DATA_SOURCE_KEY: 'd4'.repeat(32),
+  DATA_SOURCES_ALLOW_PRIVATE: 'true',
 };
 
 export default defineConfig({

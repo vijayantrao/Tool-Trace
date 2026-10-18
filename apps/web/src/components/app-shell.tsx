@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
+  Database,
   FileClock,
   LayoutGrid,
   LogOut,
@@ -44,6 +45,7 @@ const nav: NavItem[] = [
   { href: '/stations', label: 'Stations', icon: RadioTower, show: (m) => can.seeStations(m.role) },
   { href: '/insights', label: 'Insights', icon: Radar, show: (m) => can.seeInsights(m.role) },
   { href: '/people', label: 'People', icon: Users, show: (m) => can.seePeople(m.role) },
+  { href: '/data', label: 'Data sources', icon: Database, show: (m) => can.manageData(m.role) },
   { href: '/audit', label: 'Audit trail', icon: FileClock, show: (m) => can.seeAudit(m.role) },
 ];
 

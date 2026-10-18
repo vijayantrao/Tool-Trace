@@ -99,7 +99,18 @@ On Render, add `REDIS_URL` with that value. Worth it once you run more than one 
 
 A station tap while the API is asleep is delivered when it wakes. The station shows "No reply" until then.
 
-## 8. A real (non-demo) deployment
+## 8. Optional: data sources (Excel, CSV, databases)
+
+Excel and CSV imports work everywhere, including the demo. Connections to MySQL, PostgreSQL and SQL Server need two settings on Render (`render.yaml` already generates the first):
+
+| Key | Value |
+|---|---|
+| `DATA_SOURCE_KEY` | 32 random bytes, hex or base64. Encrypts saved database passwords. Changing it means re-entering them. |
+| `DATA_SOURCES_ALLOW_PRIVATE` | `true` only for an on-premises install whose databases are on the factory network (10.x, 192.168.x...). Leave unset in the cloud. |
+
+Database connections stay off in demo mode. For each connection, use a database account with only what it needs: read access to one table for imports, or the right to create and write one table for a copy.
+
+## 9. A real (non-demo) deployment
 
 Use a **separate** Neon database, and on Render:
 

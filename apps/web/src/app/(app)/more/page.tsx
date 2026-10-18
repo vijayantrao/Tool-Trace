@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ChevronRight, FileClock, LogOut, QrCode, Radar, RadioTower, Users } from 'lucide-react';
+import { ChevronRight, Database, FileClock, LogOut, QrCode, Radar, RadioTower, Users } from 'lucide-react';
 import { useSignOut } from '@/components/app-shell';
 import { PageHeader } from '@/components/ui';
 import { initials, roleLabel } from '@/lib/format';
@@ -17,6 +17,7 @@ export default function MorePage() {
     can.seeInsights(me.role) && { href: '/insights', label: 'Insights', icon: Radar },
     can.seeStations(me.role) && { href: '/stations', label: 'Stations', icon: RadioTower },
     can.seePeople(me.role) && { href: '/people', label: 'People and invites', icon: Users },
+    can.manageData(me.role) && { href: '/data', label: 'Data sources', icon: Database },
     can.seeAudit(me.role) && { href: '/audit', label: 'Audit trail', icon: FileClock },
   ].filter(Boolean) as { href: string; label: string; icon: typeof QrCode }[];
 
