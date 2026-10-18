@@ -447,7 +447,13 @@ test('admin imports from a PostgreSQL table, then keeps a copy of the tools in o
     await expect(page.getByRole('region', { name: 'Import from PostgreSQL' }).getByText(/^2 added, 0 updated, 0 unchanged$/)).toBeVisible();
 
     await page.getByRole('tab', { name: /Create a new data source/ }).click();
-    await page.getByRole('button', { name: /PostgreSQL.*Create new/ }).click();
+    await expect(page.getByRole('tab', { name: /Create a new data source/ })).toHaveAttribute('aria-selected', 'true');
+    const createTile = page.getByRole('tabpanel', { name: 'Create a new data source' }).getByRole('button', { name: /PostgreSQL/ });
+    // If this ever fails on CI, say what was on the screen instead (CI artifacts aren't always at hand).
+    await createTile.waitFor({ timeout: 15_000 }).catch(async () => {
+      throw new Error(`No PostgreSQL tile. The page showed:\n${(await page.locator('main').ariaSnapshot()).slice(0, 4000)}`);
+    });
+    await createTile.click();
     await connect();
     await page.getByRole('button', { name: 'Create table and copy tools' }).click();
     await expect(page.getByRole('region', { name: 'Create a ToolTrace table in PostgreSQL' }).getByText(/^Copied \d+ tools to tooltrace_tools$/)).toBeVisible();
