@@ -435,6 +435,10 @@ test('admin imports from a PostgreSQL table, then keeps a copy of the tools in o
     await expect(page.getByText(/Connected to tooltrace_e2e_source/)).toBeVisible();
   };
 
+  // Collected so that a failure on CI says what the browser saw.
+  const browserErrors: string[] = [];
+  page.on('pageerror', (e) => browserErrors.push(`pageerror: ${e.message}`));
+  page.on('console', (m) => m.type() === 'error' && browserErrors.push(`console: ${m.text()}`));
   try {
     await page.goto('/data');
     await page.getByRole('button', { name: /PostgreSQL.*Connect existing/ }).click();
@@ -447,7 +451,11 @@ test('admin imports from a PostgreSQL table, then keeps a copy of the tools in o
     await expect(page.getByRole('region', { name: 'Import from PostgreSQL' }).getByText(/^2 added, 0 updated, 0 unchanged$/)).toBeVisible();
 
     await page.getByRole('tab', { name: /Create a new data source/ }).click();
-    await expect(page.getByRole('tab', { name: /Create a new data source/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('tab', { name: /Create a new data source/ }))
+      .toHaveAttribute('aria-selected', 'true')
+      .catch(async () => {
+        throw new Error(`Tab missing at ${page.url()}. Errors: ${browserErrors.join(' | ').slice(0, 1500)}\nScreen:\n${(await page.locator('body').ariaSnapshot()).slice(0, 3000)}`);
+      });
     const createTile = page.getByRole('tabpanel', { name: 'Create a new data source' }).getByRole('button', { name: /PostgreSQL/ });
     // If this ever fails on CI, say what was on the screen instead (CI artifacts aren't always at hand).
     await createTile.waitFor({ timeout: 15_000 }).catch(async () => {
