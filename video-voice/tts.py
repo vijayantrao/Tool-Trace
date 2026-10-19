@@ -16,7 +16,9 @@ def spoken(beat):
 
 
 async def synth(beat):
-    for attempt in range(5):
+    if (out / f"{beat['id']}.mp3").exists() and (out / f"{beat['id']}.json").exists():
+        return True
+    for attempt in range(10):
         try:
             comm = edge_tts.Communicate(spoken(beat), script["voice"], rate=script["rate"], boundary="WordBoundary")
             audio, words = bytearray(), []
@@ -26,17 +28,24 @@ async def synth(beat):
                 elif c["type"] == "WordBoundary":
                     words.append({"w": c["text"], "t": c["offset"] / 1e7, "d": c["duration"] / 1e7})
             (out / f"{beat['id']}.mp3").write_bytes(audio)
+            if not audio or not words:
+                raise RuntimeError("empty result")
             (out / f"{beat['id']}.json").write_text(json.dumps(words))
-            return
+            return True
         except Exception as e:  # transient service errors
             print("retry", beat["id"], e, file=sys.stderr)
-            await asyncio.sleep(3 * (attempt + 1))
-    raise SystemExit(f"TTS failed for {beat['id']}")
+            await asyncio.sleep(min(6 * (attempt + 1), 45))
+    print("FAILED", beat["id"], file=sys.stderr)
+    return False
 
 
 async def main():
+    missing = []
     for beat in script["beats"]:
-        await synth(beat)
+        if not await synth(beat):
+            missing.append(beat["id"])
+        await asyncio.sleep(2)
+    print("missing:", missing)
 
 
 asyncio.run(main())
@@ -49,6 +58,8 @@ norm = lambda s: re.sub(r"[^a-z0-9 ]", "", s.lower().replace("-", " "))
 report = {}
 for beat in script["beats"]:
     path = out / f"{beat['id']}.mp3"
+    if not (out / f"{beat['id']}.json").exists():
+        continue
     dur = float(subprocess.check_output(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)]))
     pcm = subprocess.check_output(["ffmpeg", "-v", "error", "-i", str(path), "-f", "s16le", "-ac", "1", "-ar", "16000", "-"])
     audio = np.frombuffer(pcm, np.int16).astype(np.float32) / 32768
