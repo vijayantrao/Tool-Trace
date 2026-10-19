@@ -1,0 +1,162 @@
+{
+ "i1": {
+  "duration": 6.144,
+  "heard": "Hello everyone!  In this video, I'll walk you through tool trays.",
+  "match": 0.959
+ },
+ "i2": {
+  "duration": 7.848,
+  "heard": "Tool trace keeps track of every tool in your factory and its calibration in one simple app.",
+  "match": 1.0
+ },
+ "i3": {
+  "duration": 11.616,
+  "heard": "It is built for the tool crib, the shop floor and the quality team.  It works on a computer, on a phone and with smart RFID stations.",
+  "match": 0.985
+ },
+ "i4": {
+  "duration": 4.008,
+  "heard": "First, the problems most plants face today.",
+  "match": 1.0
+ },
+ "p1": {
+  "duration": 10.104,
+  "heard": "Problem 1. Tools are tracked in a paper register or an excel sheet.  So nobody really knows who has the torque wrench right now.",
+  "match": 0.98
+ },
+ "p2": {
+  "duration": 8.424,
+  "heard": "Problem 2. A tool whose calibration has expired can still be used on a job because nothing stops it.",
+  "match": 0.98
+ },
+ "p3": {
+  "duration": 8.16,
+  "heard": "Problem 3. Tools go missing.  They are bought again and work waits while people search.",
+  "match": 0.959
+ },
+ "p4": {
+  "duration": 8.16,
+  "heard": "And problem 4. When an auditor asks for proof, someone spends hours digging through old files.",
+  "match": 0.973
+ },
+ "a0": {
+  "duration": 2.976,
+  "heard": "Tool trays fixes all four.",
+  "match": 0.92
+ },
+ "a1": {
+  "duration": 8.88,
+  "heard": "Every tool follows one simple cycle, label it, issue it, use it, return it and calibrate it on time.",
+  "match": 1.0
+ },
+ "a2": {
+  "duration": 11.328,
+  "heard": "You get a live tool board, a calibration lock that cannot be skipped,  early warnings for tools at risk and an audit trail that is always ready.",
+  "match": 0.996
+ },
+ "a3": {
+  "duration": 5.568,
+  "heard": "and all of it is stored safely in your company's own database.",
+  "match": 1.0
+ },
+ "w1": {
+  "duration": 14.976,
+  "heard": "Let's open the app.  Staff sign in with a passkey,  like a fingerprint or a phone pin,  so there are no passwords to remember.  For this demo, I'll sign in as the admin.",
+  "match": 0.987
+ },
+ "w2": {
+  "duration": 8.256,
+  "heard": "This is the tool board.  Every tool has its own place just like a shadow board on the wall.",
+  "match": 0.994
+ },
+ "w3": {
+  "duration": 12.624,
+  "heard": "A solid card means the tool is in the crib.  A dotted card means it is out and shows who has it and when it is due back.  Red means overdue.",
+  "match": 0.993
+ },
+ "w4": {
+  "duration": 6.648,
+  "heard": "To issue a tool, I open it, choose the person and pick when it is due back.",
+  "match": 1.0
+ },
+ "w5": {
+  "duration": 6.432,
+  "heard": "One click and it is checked out.  The board updates straight away.",
+  "match": 0.992
+ },
+ "w6": {
+  "duration": 10.872,
+  "heard": "When a tool comes back, I record its condition.  If it is damaged, it goes into quarantine, so nobody takes it by mistake.",
+  "match": 0.996
+ },
+ "w7": {
+  "duration": 12.072,
+  "heard": "Now calibration. This torque wrench has expired so tool trays has locked it. It cannot be  issued until it is calibrated again.",
+  "match": 0.98
+ },
+ "w8": {
+  "duration": 10.272,
+  "heard": "I record the new calibration with its certificate number.  The tool is unlocked and the next due date is worked out for me.",
+  "match": 0.996
+ },
+ "w9": {
+  "duration": 14.472,
+  "heard": "already have your tool list in Excel. Open data sources. You can bring in a workbook or a CSV file  or connect MySQL, Postgres or SQL Server.",
+  "match": 0.971
+ },
+ "w10": {
+  "duration": 12.696,
+  "heard": "Tool trace matches the columns for you and checks every row first.  It shows exactly what will be added and what will be skipped before anything changes.",
+  "match": 0.997
+ },
+ "w11": {
+  "duration": 9.456,
+  "heard": "On the shop floor, technicians use their phone.  They scan the QR label on a tool and take it into taps.",
+  "match": 0.98
+ },
+ "w12": {
+  "duration": 10.368,
+  "heard": "No signal. No problem. The app keeps working offline and syncs as soon as the phone is  back online.",
+  "match": 0.995
+ },
+ "w13": {
+  "duration": 10.776,
+  "heard": "At the crib, a smart station reads RFID tags.  A technician taps their badge, then the tool, and the board updates live.",
+  "match": 0.983
+ },
+ "w14": {
+  "duration": 10.56,
+  "heard": "Insights learns from past checkouts.  It points out tools at risk of being lost  and explains the reason in plain words.",
+  "match": 0.987
+ },
+ "w15": {
+  "duration": 10.392,
+  "heard": "Finally, the audit trail records every action who did what and when.  One click proves that nothing has been changed.",
+  "match": 0.996
+ },
+ "g0": {
+  "duration": 2.832,
+  "heard": "Getting started is simple.",
+  "match": 1.0
+ },
+ "g1": {
+  "duration": 6.144,
+  "heard": "1. Import your tool list from Excel or connect your database.",
+  "match": 0.967
+ },
+ "g2": {
+  "duration": 6.552,
+  "heard": "To print a QR label for each tool and invite your team with a link.",
+  "match": 0.985
+ },
+ "g3": {
+  "duration": 6.24,
+  "heard": "3. Start issuing tools.  Tool trace takes care of the rest.",
+  "match": 0.939
+ },
+ "o1": {
+  "duration": 8.784,
+  "heard": "Tool trays. Every tool, every calibration always accounted for.  Thanks for watching.",
+  "match": 0.969
+ }
+}
