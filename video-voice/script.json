@@ -1,0 +1,48 @@
+{
+ "voice": "en-IN-PrabhatNeural",
+ "rate": "-4%",
+ "beats": [
+  {"id": "i1", "text": "Hello everyone. In this video, I'll walk you through ToolTrace."},
+  {"id": "i2", "text": "ToolTrace keeps track of every tool in your factory, and its calibration, in one simple app."},
+  {"id": "i3", "text": "It is built for the tool crib, the shop floor and the quality team. It works on a computer, on a phone, and with smart RFID stations.",
+   "say": "It is built for the tool crib, the shop floor and the quality team. It works on a computer, on a phone, and with smart R-F-I-D stations."},
+  {"id": "i4", "text": "First, the problems most plants face today."},
+
+  {"id": "p1", "text": "Problem one: tools are tracked in a paper register or an Excel sheet, so nobody really knows who has the torque wrench right now."},
+  {"id": "p2", "text": "Problem two: a tool whose calibration has expired can still be used on a job, because nothing stops it."},
+  {"id": "p3", "text": "Problem three: tools go missing. They are bought again, and work waits while people search."},
+  {"id": "p4", "text": "And problem four: when an auditor asks for proof, someone spends hours digging through old files."},
+
+  {"id": "a0", "text": "ToolTrace fixes all four."},
+  {"id": "a1", "text": "Every tool follows one simple cycle: label it, issue it, use it, return it, and calibrate it on time."},
+  {"id": "a2", "text": "You get a live tool board, a calibration lock that cannot be skipped, early warnings for tools at risk, and an audit trail that is always ready."},
+  {"id": "a3", "text": "And all of it is stored safely in your company's own database."},
+
+  {"id": "w1", "text": "Let's open the app. Staff sign in with a passkey, like a fingerprint or a phone PIN, so there are no passwords to remember. For this demo, I'll sign in as the admin."},
+  {"id": "w2", "text": "This is the tool board. Every tool has its own place, just like a shadow board on the wall."},
+  {"id": "w3", "text": "A solid card means the tool is in the crib. A dotted card means it is out, and shows who has it and when it is due back. Red means overdue."},
+  {"id": "w4", "text": "To issue a tool, I open it, choose the person, and pick when it is due back."},
+  {"id": "w5", "text": "One click, and it is checked out. The board updates straight away."},
+  {"id": "w6", "text": "When a tool comes back, I record its condition. If it is damaged, it goes into quarantine, so nobody takes it by mistake."},
+  {"id": "w7", "text": "Now, calibration. This torque wrench has expired, so ToolTrace has locked it. It cannot be issued until it is calibrated again."},
+  {"id": "w8", "text": "I record the new calibration with its certificate number. The tool is unlocked, and the next due date is worked out for me."},
+  {"id": "w9", "text": "Already have your tool list in Excel? Open Data sources. You can bring in a workbook or a CSV file, or connect MySQL, PostgreSQL or SQL Server.",
+   "say": "Already have your tool list in Excel? Open Data sources. You can bring in a workbook or a C-S-V file, or connect My S-Q-L, Postgres, or S-Q-L Server."},
+  {"id": "w10", "text": "ToolTrace matches the columns for you, and checks every row first. It shows exactly what will be added, and what will be skipped, before anything changes."},
+  {"id": "w11", "text": "On the shop floor, technicians use their phone. They scan the QR label on a tool, and take it in two taps.",
+   "say": "On the shop floor, technicians use their phone. They scan the Q-R label on a tool, and take it in two taps."},
+  {"id": "w12", "text": "No signal? No problem. The app keeps working offline, and syncs as soon as the phone is back online."},
+  {"id": "w13", "text": "At the crib, a smart station reads RFID tags. A technician taps their badge, then the tool, and the board updates live.",
+   "say": "At the crib, a smart station reads R-F-I-D tags. A technician taps their badge, then the tool, and the board updates live."},
+  {"id": "w14", "text": "Insights learns from past check-outs. It points out tools at risk of being lost, and explains the reason in plain words."},
+  {"id": "w15", "text": "Finally, the audit trail records every action: who did what, and when. One click proves that nothing has been changed."},
+
+  {"id": "g0", "text": "Getting started is simple."},
+  {"id": "g1", "text": "One: import your tool list from Excel, or connect your database."},
+  {"id": "g2", "text": "Two: print a QR label for each tool, and invite your team with a link.",
+   "say": "Two: print a Q-R label for each tool, and invite your team with a link."},
+  {"id": "g3", "text": "Three: start issuing tools. ToolTrace takes care of the rest."},
+
+  {"id": "o1", "text": "ToolTrace. Every tool, every calibration, always accounted for. Thanks for watching!"}
+ ]
+}
