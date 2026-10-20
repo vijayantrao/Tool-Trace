@@ -11,14 +11,26 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # One pull request for all action updates, not one each.
+    groups:
+      actions:
+        patterns: ['*']
+  # Node majors are moved by hand, LTS to LTS, together with CI's node-version
+  # (odd-numbered Node releases are never LTS).
   - package-ecosystem: docker
     directory: /apps/api
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
   - package-ecosystem: docker
     directory: /apps/web
     schedule:
       interval: weekly
+    ignore:
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
   - package-ecosystem: docker
     directory: /ml
     schedule:

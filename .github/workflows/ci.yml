@@ -71,10 +71,10 @@ jobs:
       # Also runs the shared-rate-limit tests against a real Redis.
       REDIS_TEST_URL: redis://localhost:6379
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
@@ -103,10 +103,10 @@ jobs:
       run:
         working-directory: ml
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
           cache: pip
           cache-dependency-path: ml/requirements-dev.txt
       - run: pip install -r requirements-dev.txt
@@ -134,16 +134,16 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
       ML_PYTHON: python
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
       - run: npm ci
       # The journey runs the real nightly ML job against the test database.
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
           cache: pip
           cache-dependency-path: ml/requirements.txt
       - run: pip install -r ml/requirements.txt
@@ -151,7 +151,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
       - run: scripts/ci/run.sh "Browser tests" npm run test:e2e
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: playwright-traces
@@ -180,15 +180,15 @@ jobs:
       NEXT_TELEMETRY_DISABLED: 1
       ML_PYTHON: python
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v6
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 26
           cache: npm
       - run: npm ci
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
-          python-version: '3.13'
+          python-version: '3.14'
           cache: pip
           cache-dependency-path: ml/requirements.txt
       - run: pip install -r ml/requirements.txt
@@ -197,7 +197,7 @@ jobs:
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
       - run: scripts/ci/run.sh "Demo tour" npm run tour -w apps/web
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tooltrace-demo-video
           path: docs/demo/
@@ -210,14 +210,14 @@ jobs:
       run:
         working-directory: firmware/station
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: sudo apt-get install -y --no-install-recommends libssl-dev
       - name: Host tests (shared signing vectors)
         run: make -C test/host
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: ~/.platformio
           key: pio-${{ runner.os }}-${{ hashFiles('firmware/station/platformio.ini') }}
@@ -230,7 +230,7 @@ jobs:
     name: Docker images - build and CVE scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - run: docker build -f apps/api/Dockerfile -t tooltrace-api:ci .
       - run: docker build -f apps/web/Dockerfile -t tooltrace-web:ci .
       - run: docker build -f ml/Dockerfile -t tooltrace-ml:ci .
