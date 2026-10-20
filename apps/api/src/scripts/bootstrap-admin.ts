@@ -20,7 +20,7 @@ if (!email.success) {
 }
 
 const config = loadConfig();
-const sql = createDb(config.DATABASE_URL, { max: 1 });
+const sql = createDb(config.DATABASE_URL, { max: 1, timeZone: config.TOOLTRACE_SITE_TZ });
 try {
   const [admins] = await sql<{ count: number }[]>`
     SELECT count(*)::int AS count FROM users WHERE role = 'admin' AND is_active`;

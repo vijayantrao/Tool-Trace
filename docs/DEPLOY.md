@@ -99,6 +99,10 @@ On Render, add `REDIS_URL` with that value. Worth it once you run more than one 
 
 A station tap while the API is asleep is delivered when it wakes. The station shows "No reply" until then.
 
+### The plant's time zone
+
+Calibration dates expire at midnight **on the shop floor**, not on the database server (Neon runs in UTC). The API and the ML job both read `TOOLTRACE_SITE_TZ` (an IANA name, default `Asia/Kolkata`). Set it on Render and in the ML workflow only if the plant is elsewhere, for example `Europe/Berlin`.
+
 ## 8. Optional: data sources (Excel, CSV, databases)
 
 Excel and CSV imports work everywhere, including the demo. Connections to MySQL, PostgreSQL and SQL Server need two settings on Render (`render.yaml` already generates the first):

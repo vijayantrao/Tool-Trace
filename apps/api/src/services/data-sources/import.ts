@@ -156,6 +156,7 @@ export async function importTools(
   };
 
   // 1. Check every row before touching anything.
+  const [{ today }] = (await tx`SELECT current_date::text AS today`) as unknown as [{ today: string }]; // the plant's today
   const seen = new Map<string, number>();
   const clean: Clean[] = [];
   for (const { row, values } of input) {
@@ -186,7 +187,7 @@ export async function importTools(
     if (last === 'invalid') { fail(`Last calibrated "${text(values.lastCalibratedOn).slice(0, 30)}" is not a date`); continue; }
     if (interval && !last) { fail('Has a calibration interval but no last-calibrated date'); continue; }
     if (last && !interval) { fail('Has a last-calibrated date but no calibration interval'); continue; }
-    if (last && last > new Date().toISOString().slice(0, 10)) { fail(`Last calibrated ${last} is in the future`); continue; }
+    if (last && last > today) { fail(`Last calibrated ${last} is in the future`); continue; }
     let rfidUid: string | null = null;
     if (text(values.rfidUid)) {
       rfidUid = normalizeUid(text(values.rfidUid));

@@ -147,6 +147,11 @@ export function toolRoutes(_deps: Deps) {
     async (c) => {
       const b = c.req.valid('json');
       const cal = b.requiresCalibration;
+      if (cal) {
+        // Same rule as recording a calibration: a future date would hold off the lock for nothing.
+        const [check] = await db(c)<{ future: boolean }[]>`SELECT ${b.lastCalibratedOn!}::date > current_date AS future`;
+        if (check!.future) throw conflict('future_date', 'Last calibrated date cannot be in the future');
+      }
       const [created] = await db(c)<{ id: string }[]>`
         INSERT INTO tools (asset_tag, name, category, home_location_id, rfid_uid, requires_calibration,
                            calibration_interval_days, last_calibrated_on, calibration_due_on)

@@ -60,6 +60,13 @@ describe('tool registry', () => {
     expect(missing.status).toBe(422);
   });
 
+  it('refuses a last-calibrated date in the future (it would push the lock date out)', async () => {
+    const future = await sk.client.post('/api/tools', calibratedTool('TW-9998', -30));
+    expect(future.status).toBe(409);
+    expect(future.body.error.code).toBe('future_date');
+    expect((await sk.client.get('/api/tools/by-tag/TW-9998')).status).toBe(404);
+  });
+
   it('rejects duplicate asset tags', async () => {
     const dup = await sk.client.post('/api/tools', calibratedTool('TW-1001', 1));
     expect(dup.status).toBe(409);

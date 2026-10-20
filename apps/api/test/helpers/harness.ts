@@ -27,9 +27,6 @@ export async function createHarness(overrides: Partial<Record<string, string>> =
 
   const url = new URL(ADMIN_URL);
   url.pathname = `/${dbName}`;
-  const sql = createDb(url.toString(), { max: 10 });
-  await migrate(sql);
-
   const config: Config = loadConfig({
     NODE_ENV: 'test',
     DATABASE_URL: url.toString(),
@@ -39,8 +36,12 @@ export async function createHarness(overrides: Partial<Record<string, string>> =
     COOKIE_SECURE: 'false',
     AUTH_RATE_LIMIT_PER_MINUTE: '1000',
     STATION_MASTER_KEY: TEST_MASTER_KEY,
+    // Tests compute dates in UTC; site-time-zone.test.ts covers other zones.
+    TOOLTRACE_SITE_TZ: 'UTC',
     ...overrides,
   });
+  const sql = createDb(url.toString(), { max: 10, timeZone: config.TOOLTRACE_SITE_TZ });
+  await migrate(sql);
   const events = await new FloorEvents(sql).start();
   // Tests fire taps far faster than people; the real limits are tested separately.
   const gateway = new StationGateway(sql, config, { burst: 1000, perSecond: 1000 });

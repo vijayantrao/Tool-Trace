@@ -46,5 +46,8 @@ services:
       # Remove for a real deployment.
       - key: DEMO_MODE
         value: "true"
+      # The plant's time zone: calibration dates expire at local midnight, not UTC midnight.
+      - key: TOOLTRACE_SITE_TZ
+        value: Asia/Kolkata
       - key: SESSION_TTL_HOURS
         value: "8"

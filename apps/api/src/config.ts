@@ -1,4 +1,14 @@
 import { z } from 'zod';
+import { DEFAULT_SITE_TZ } from './db.js';
+
+const isTimeZone = (tz: string) => {
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 const bool = z.enum(['true', 'false']).transform((v) => v === 'true');
 
@@ -65,6 +75,17 @@ const schema = z.object({
    * an on-premises install whose databases live on the factory network.
    */
   DATA_SOURCES_ALLOW_PRIVATE: bool.default(false),
+
+  // --- Site ------------------------------------------------------------------
+  /**
+   * The plant's time zone (IANA name). "Today" means today on the shop floor: calibration
+   * due dates expire at local midnight, and a calibration done today is never "in the future".
+   * The nightly ML job reads the same variable.
+   */
+  TOOLTRACE_SITE_TZ: z
+    .string()
+    .default(DEFAULT_SITE_TZ)
+    .refine(isTimeZone, 'must be an IANA time zone such as Asia/Kolkata or Europe/Berlin'),
 });
 
 export type Config = z.infer<typeof schema>;

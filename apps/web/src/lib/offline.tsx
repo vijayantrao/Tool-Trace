@@ -56,7 +56,9 @@ export function OfflineProvider({ me, children }: { me: Me; children: ReactNode 
     void refresh();
     return outbox.subscribe(() => void refresh());
   }, [refresh]);
-  useEffect(() => outbox.rememberUser({ id: me.id, displayName: me.displayName, role: me.role }), [me]);
+  useEffect(() => {
+    outbox.rememberUser({ id: me.id, displayName: me.displayName, role: me.role });
+  }, [me]);
 
   const syncNow = useCallback(async () => {
     if (busy.current || !navigator.onLine) return;

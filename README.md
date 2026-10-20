@@ -96,7 +96,7 @@ Tool cribs are often signal dead zones. With no connection, a technician can sti
 
 | Offline: actions wait on the phone | |
 |---|---|
-| ![Offline](docs/screenshots/mobile-offline.png) | The server records the real time each offline check-out was made (bounded: never in the future, at most 24 hours old), and the audit trail shows it was made offline. |
+| ![Offline](docs/screenshots/mobile-offline.png) | The server records the real time each offline check-out was made (bounded: never in the future, at most 24 hours old), and the audit trail shows it was made offline. A check-out that only syncs after its due-back time is still recorded, as overdue. |
 
 Every change is **live**: the board, tool pages and checkouts update on every open screen within a moment, whether the change came from a phone, a station, or another browser. Database triggers send `NOTIFY` only when a transaction commits, so screens never show a change that was rolled back, and any number of API instances stay in sync.
 

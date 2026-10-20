@@ -73,13 +73,18 @@ export function checkoutRoutes(_deps: Deps) {
       }
       const due = new Date(b.dueBackAt);
       const now = Date.now();
-      if (due.getTime() <= now) throw conflict('invalid_due_date', 'Due-back time must be in the future');
-      if (due.getTime() > now + MAX_CHECKOUT_DAYS * 86_400_000) {
-        throw conflict('invalid_due_date', `Checkouts can last at most ${MAX_CHECKOUT_DAYS} days`);
-      }
       const queuedAt = b.queuedAt ? new Date(b.queuedAt) : undefined;
       if (queuedAt && (queuedAt.getTime() > now + 2 * 60_000 || queuedAt.getTime() < now - MAX_OFFLINE_HOURS * 3_600_000)) {
         throw badRequest('invalid_queued_at', `Offline actions must be synced within ${MAX_OFFLINE_HOURS} hours`);
+      }
+      // Counted from when the tool was really taken. An offline check-out that syncs after its
+      // due-back time is still recorded (it is simply overdue): the tool is out either way.
+      const takenAt = Math.min(queuedAt?.getTime() ?? now, now);
+      if (due.getTime() <= takenAt) {
+        throw conflict('invalid_due_date', queuedAt ? 'Due-back time must come after the check-out' : 'Due-back time must be in the future');
+      }
+      if (due.getTime() > takenAt + MAX_CHECKOUT_DAYS * 86_400_000) {
+        throw conflict('invalid_due_date', `Checkouts can last at most ${MAX_CHECKOUT_DAYS} days`);
       }
 
       const checkout = await checkOutTool(db(c), {

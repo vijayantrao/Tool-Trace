@@ -20,6 +20,8 @@ const apiEnv = {
   DEV_MQTT_BROKER_PORT: String(MQTT_PORT),
   // Data sources: a test-only key, and the e2e database server counts as an "outside" database.
   DATA_SOURCE_KEY: 'd4'.repeat(32),
+  // The test machine and browser run in UTC; the plant's "today" must match theirs.
+  TOOLTRACE_SITE_TZ: 'UTC',
   DATA_SOURCES_ALLOW_PRIVATE: 'true',
 };
 

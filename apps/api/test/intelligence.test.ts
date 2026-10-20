@@ -44,7 +44,7 @@ beforeAll(async () => {
   ravi = await signUp(h, 'technician', 'Ravi Kumar');
   auditor = await signUp(h, 'auditor', 'Audrey');
   const loc = (await sk.client.post('/api/locations', { name: 'Crib', kind: 'crib' })).body.location.id;
-  for (const tag of ['INS-0001', 'INS-0002', 'INS-0003', 'OFF-0001', 'OFF-0002', 'OFF-0003', 'OFF-0004']) {
+  for (const tag of ['INS-0001', 'INS-0002', 'INS-0003', 'OFF-0001', 'OFF-0002', 'OFF-0003', 'OFF-0004', 'OFF-0005']) {
     const res = await sk.client.post('/api/tools', {
       assetTag: tag,
       name: `Tool ${tag}`,
@@ -248,6 +248,35 @@ describe('offline actions replayed with idempotency keys', () => {
     const audit = await admin.client.get(`/api/audit?action=tool.checked_out&entityId=${tools['OFF-0003']!}`);
     expect(audit.body.entries[0].details.offlineQueuedAt).toBeTruthy();
 
+    const future = new Date(Date.now() + 10 * 60_000).toISOString();
+    const stale = new Date(Date.now() - 25 * 3_600_000).toISOString();
+    for (const q of [future, stale]) {
+      const bad = await asha.client.post('/api/checkouts', { assetTag: 'INS-0002', dueBackAt: inDays(1), queuedAt: q });
+      expect(bad.status).toBe(400);
+      expect(bad.body.error.code).toBe('invalid_queued_at');
+    }
+  });
+
+  it('records an offline check-out that is already overdue by the time the phone reconnects', async () => {
+    // Taken at 22:00 for "end of shift" (8 h), phone back online 10 hours later: the tool really is out, and late.
+    const queuedAt = new Date(Date.now() - 10 * 3_600_000).toISOString();
+    const dueBackAt = new Date(Date.now() - 2 * 3_600_000).toISOString();
+    const res = await withKey(asha.client, '/api/checkouts', { assetTag: 'OFF-0005', dueBackAt, queuedAt }, randomUUID());
+    expect(res.status).toBe(201);
+    const open = (await asha.client.get('/api/checkouts?open=true')).body.checkouts.find(
+      (c: { assetTag: string }) => c.assetTag === 'OFF-0005',
+    );
+    expect(open).toMatchObject({ overdue: true });
+
+    // The due time still has to come after the moment the tool was taken, and online check-outs still need a future one.
+    const before = new Date(Date.now() - 11 * 3_600_000).toISOString();
+    const offlineBad = await asha.client.post('/api/checkouts', { assetTag: 'OFF-0005', dueBackAt: before, queuedAt });
+    expect(offlineBad.body.error.code).toBe('invalid_due_date');
+    const onlineBad = await asha.client.post('/api/checkouts', { assetTag: 'OFF-0005', dueBackAt });
+    expect(onlineBad.body.error.code).toBe('invalid_due_date');
+  });
+
+  it('keeps the offline time bounds', async () => {
     const future = new Date(Date.now() + 10 * 60_000).toISOString();
     const stale = new Date(Date.now() - 25 * 3_600_000).toISOString();
     for (const q of [future, stale]) {

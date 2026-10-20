@@ -11,7 +11,7 @@ import { StationGateway } from './stations/gateway.js';
 import { connectGateway, startDevBroker } from './stations/mqtt.js';
 
 const config = loadConfig();
-const sql = createDb(config.DATABASE_URL);
+const sql = createDb(config.DATABASE_URL, { timeZone: config.TOOLTRACE_SITE_TZ });
 
 // Demo mode signs people in without a passkey, so it only ever runs on a demo database.
 // An empty database becomes one automatically (resetDemo refuses if it holds real accounts).
