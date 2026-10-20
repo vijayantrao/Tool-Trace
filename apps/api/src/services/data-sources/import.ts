@@ -34,6 +34,12 @@ export const TOOL_FIELDS = [
     synonyms: ['last calibrated', 'last calibrated on', 'last calibration', 'last calibration date', 'calibrated on', 'calibration date', 'last cal', 'last cal date', 'cal date'] },
   { key: 'rfidUid', label: 'RFID tag', required: false, hint: '11:22:33:44',
     synonyms: ['rfid', 'rfid tag', 'rfid uid', 'uid', 'tag uid', 'nfc', 'rfid id'] },
+  { key: 'unitPrice', label: 'Unit price', required: false, hint: '12500',
+    synonyms: ['unit price', 'unitprice', 'price', 'cost', 'unit cost', 'rate', 'unit rate', 'price inr', 'price rs', 'unit price inr', 'value', 'unit value'] },
+  { key: 'make', label: 'Make', required: false, hint: 'Norbar',
+    synonyms: ['make', 'brand', 'manufacturer', 'mfr', 'maker', 'company'] },
+  { key: 'model', label: 'Model', required: false, hint: 'TTi 100',
+    synonyms: ['model', 'model no', 'model number', 'part no', 'part number', 'part'] },
 ] as const;
 
 export type FieldKey = (typeof TOOL_FIELDS)[number]['key'];
@@ -97,6 +103,20 @@ export function toIsoDate(v: unknown, order: DateOrder): string | null | 'invali
   return `${y}-${pad(m)}-${pad(d)}`;
 }
 
+/** 12500, "12,500", "₹ 12,500.00", "Rs. 1200" -> a price with at most 2 decimals. */
+export function toPrice(v: unknown): number | null | 'invalid' {
+  if (v === null || v === undefined || v === '') return null;
+  let n: number;
+  if (typeof v === 'number') n = v;
+  else {
+    const s = text(v).replace(/^(₹|rs\.?|inr|\$|€|£)\s*/i, '').replace(/\s*(₹|rs\.?|inr|\/-)$/i, '').replace(/,/g, '').trim();
+    if (!/^\d+(\.\d+)?$/.test(s)) return 'invalid';
+    n = Number(s);
+  }
+  if (!Number.isFinite(n) || n < 0 || n >= 1e10) return 'invalid';
+  return Math.round(n * 100) / 100;
+}
+
 /** "180", 180, "180 days", "6 months", "1 year" -> days. */
 export function toIntervalDays(v: unknown): number | null | 'invalid' {
   if (v === null || v === undefined || v === '') return null;
@@ -138,6 +158,9 @@ interface Clean {
   intervalDays: number | null;
   lastCalibratedOn: string | null;
   rfidUid: string | null;
+  unitPrice: number | null;
+  make: string | null;
+  model: string | null;
 }
 
 const MAX_PROBLEMS = 200;
@@ -193,7 +216,12 @@ export async function importTools(
       rfidUid = normalizeUid(text(values.rfidUid));
       if (!rfidUid) { fail(`RFID tag "${text(values.rfidUid).slice(0, 40)}" must be 4, 7 or 10 bytes of hex, like 11:22:33:44`); continue; }
     }
-    clean.push({ row, assetTag, name, category, location, intervalDays: interval, lastCalibratedOn: last, rfidUid });
+    const unitPrice = toPrice(values.unitPrice);
+    if (unitPrice === 'invalid') { fail(`Unit price "${text(values.unitPrice).slice(0, 30)}" is not an amount`); continue; }
+    const make = text(values.make) || null;
+    const model = text(values.model) || null;
+    if ((make?.length ?? 0) > 80 || (model?.length ?? 0) > 80) { fail('Make or model is longer than 80 characters'); continue; }
+    clean.push({ row, assetTag, name, category, location, intervalDays: interval, lastCalibratedOn: last, rfidUid, unitPrice, make, model });
   }
 
   // 2. Locations: match by name (any case); create the missing ones as tool cribs, up front.
@@ -220,9 +248,11 @@ export async function importTools(
   const existing = new Map(
     (
       await tx<{ id: string; assetTag: string; name: string; category: string; homeLocationId: string; rfidUid: string | null;
-        status: string; requiresCalibration: boolean; calibrationIntervalDays: number | null; lastCalibratedOn: string | null }[]>`
-        SELECT id, asset_tag, name, category, home_location_id, rfid_uid, status, requires_calibration,
-               calibration_interval_days, last_calibrated_on::text AS last_calibrated_on
+        status: string; requiresCalibration: boolean; calibrationIntervalDays: number | null; lastCalibratedOn: string | null;
+        unitPrice: number | null; make: string | null; model: string | null }[]>`
+        SELECT id, asset_tag, name, category, home_location_id, rfid_uid, status::text, requires_calibration,
+               calibration_interval_days, last_calibrated_on::text AS last_calibrated_on,
+               unit_price::float8 AS unit_price, make, model
         FROM tools WHERE asset_tag = ANY(${clean.map((c) => c.assetTag)})`
     ).map((t) => [t.assetTag, t]),
   );
@@ -238,9 +268,10 @@ export async function importTools(
           const cal = c.intervalDays !== null;
           await sp`
             INSERT INTO tools (asset_tag, name, category, home_location_id, rfid_uid, requires_calibration,
-                               calibration_interval_days, last_calibrated_on, calibration_due_on)
+                               calibration_interval_days, last_calibrated_on, calibration_due_on, unit_price, make, model)
             VALUES (${c.assetTag}, ${c.name}, ${c.category}, ${loc}, ${c.rfidUid}, ${cal},
-                    ${c.intervalDays}, ${c.lastCalibratedOn}::date, ${c.lastCalibratedOn}::date + ${c.intervalDays ?? 0}::int)`;
+                    ${c.intervalDays}, ${c.lastCalibratedOn}::date, ${c.lastCalibratedOn}::date + ${c.intervalDays ?? 0}::int,
+                    ${c.unitPrice}, ${c.make}, ${c.model})`;
           result.created++;
           if (result.changes.length < 50) result.changes.push({ row: c.row, assetTag: c.assetTag, action: 'create', fields: [] });
           return;
@@ -252,10 +283,15 @@ export async function importTools(
         if (old.homeLocationId !== loc) fields.push('location');
         // An empty RFID cell means "not in this sheet", never "remove the tag".
         if (c.rfidUid && old.rfidUid !== c.rfidUid) fields.push('RFID tag');
+        // Empty price, make or model cells mean "not in this sheet" too.
+        if (c.unitPrice !== null && old.unitPrice !== c.unitPrice) fields.push('price');
+        if (c.make && old.make !== c.make) fields.push('make');
+        if (c.model && old.model !== c.model) fields.push('model');
         if (fields.length) {
           await sp`
             UPDATE tools SET name = ${c.name}, category = ${c.category}, home_location_id = ${loc},
-                   rfid_uid = COALESCE(${c.rfidUid}, rfid_uid)
+                   rfid_uid = COALESCE(${c.rfidUid}, rfid_uid), unit_price = COALESCE(${c.unitPrice}::numeric, unit_price),
+                   make = COALESCE(${c.make}, make), model = COALESCE(${c.model}, model)
             WHERE id = ${old.id}`;
         }
 

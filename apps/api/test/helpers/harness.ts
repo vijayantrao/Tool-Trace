@@ -11,6 +11,9 @@ import { migrate } from '../../src/migrate.js';
 import { createInvite } from '../../src/services/invites.js';
 import { FloorEvents } from '../../src/stations/floor-events.js';
 import { StationGateway } from '../../src/stations/gateway.js';
+import { JobRunner } from '../../src/services/jobs.js';
+import { deliverEmails, type OutgoingMail } from '../../src/services/mail.js';
+import { Notifier } from '../../src/services/notify.js';
 import type { Role } from '../../src/types.js';
 import { SoftAuthenticator } from './authenticator.js';
 
@@ -44,8 +47,18 @@ export async function createHarness(overrides: Partial<Record<string, string>> =
   await migrate(sql);
   const events = await new FloorEvents(sql).start();
   // Tests fire taps far faster than people; the real limits are tested separately.
-  const gateway = new StationGateway(sql, config, { burst: 1000, perSecond: 1000 });
-  const app = createApp({ sql, config, events, gateway, sseHeartbeatMs: 300 });
+  const notifier = new Notifier(config);
+  const gateway = new StationGateway(sql, config, { burst: 1000, perSecond: 1000 }, notifier);
+  const app = createApp({ sql, config, events, gateway, notifier, sseHeartbeatMs: 300 });
+  // Email goes to this array instead of a mail server.
+  const mailbox: OutgoingMail[] = [];
+  let failMail = false;
+  const mailer = {
+    async send(m: OutgoingMail) {
+      if (failMail) throw new Error('mail server said no');
+      mailbox.push(m);
+    },
+  };
 
   return {
     sql,
@@ -53,6 +66,13 @@ export async function createHarness(overrides: Partial<Record<string, string>> =
     app,
     events,
     gateway,
+    notifier,
+    jobs: new JobRunner(sql, config, notifier),
+    mailbox,
+    deliver: () => deliverEmails(sql, mailer),
+    failMail: (fail: boolean) => {
+      failMail = fail;
+    },
     client: () => new TestClient(app),
     async close() {
       await events.stop();
@@ -91,6 +111,25 @@ export class TestClient {
     const text = await res.text();
     const json = text ? JSON.parse(text) : null;
     return { status: res.status, body: json, headers: res.headers, raw: res };
+  }
+
+  private cookieHeader(): Record<string, string> {
+    return this.cookies.size ? { cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join('; ') } : {};
+  }
+
+  /** multipart/form-data, as a browser sends a file. */
+  async upload(path: string, form: Record<string, string | Blob | File>) {
+    const fd = new FormData();
+    for (const [k, v] of Object.entries(form)) fd.append(k, v as string | Blob);
+    const res = await this.app.request(path, { method: 'POST', headers: { origin: ORIGIN, ...this.cookieHeader() }, body: fd });
+    const text = await res.text();
+    return { status: res.status, body: text ? JSON.parse(text) : null };
+  }
+
+  /** Raw bytes and headers (files). */
+  async download(path: string) {
+    const res = await this.app.request(path, { headers: { origin: ORIGIN, ...this.cookieHeader() } });
+    return { status: res.status, headers: res.headers, bytes: Buffer.from(await res.arrayBuffer()) };
   }
 
   get = (path: string) => this.request('GET', path);

@@ -31,7 +31,9 @@ export function auditRoutes(_deps: Deps) {
                a.actor_user_id, u.display_name AS actor_name,
                a.actor_station_id, s.name AS station_name,
                t.asset_tag AS tool_asset_tag,
-               coalesce(t.asset_tag || ' ' || t.name, eu.display_name, es.name, ckt.asset_tag || ' ' || ckt.name) AS entity_name,
+               coalesce(t.asset_tag || ' ' || t.name, eu.display_name, es.name, ckt.asset_tag || ' ' || ckt.name,
+                        si.code || ' ' || si.name, smi.code || ' ' || smi.name, k.asset_tag || ' ' || k.name, kik.asset_tag || ' ' || kik.name,
+                        'REQ-' || lpad(rq.number::text, 4, '0') || ' ' || rq.title) AS entity_name,
                encode(a.hash, 'hex') AS hash
         FROM audit_log a
         LEFT JOIN users u ON u.id = a.actor_user_id
@@ -41,6 +43,13 @@ export function auditRoutes(_deps: Deps) {
         LEFT JOIN stations es ON a.entity_type = 'station' AND es.id::text = a.entity_id
         LEFT JOIN checkouts ck ON a.entity_type = 'checkout' AND ck.id::text = a.entity_id
         LEFT JOIN tools ckt ON ckt.id = ck.tool_id
+        LEFT JOIN stock_items si ON a.entity_type = 'stock_item' AND si.id::text = a.entity_id
+        LEFT JOIN stock_movements sm ON a.entity_type = 'stock_issue' AND sm.id::text = a.entity_id
+        LEFT JOIN stock_items smi ON smi.id = sm.item_id
+        LEFT JOIN kits k ON a.entity_type = 'kit' AND k.id::text = a.entity_id
+        LEFT JOIN kit_issues kis ON a.entity_type = 'kit_issue' AND kis.id::text = a.entity_id
+        LEFT JOIN kits kik ON kik.id = kis.kit_id
+        LEFT JOIN requests rq ON a.entity_type = 'request' AND rq.id::text = a.entity_id
         WHERE (${like}::text IS NULL OR a.action LIKE ${like})
           AND (${q.entityId ?? null}::text IS NULL OR a.entity_id = ${q.entityId ?? null})
           AND (${q.before ?? null}::bigint IS NULL OR a.id < ${q.before ?? null})

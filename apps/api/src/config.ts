@@ -76,7 +76,22 @@ const schema = z.object({
    */
   DATA_SOURCES_ALLOW_PRIVATE: bool.default(false),
 
+  // --- Email (optional) ------------------------------------------------------
+  /**
+   * Outgoing mail server for notification emails, as a URL:
+   * smtp://user:password@smtp-relay.brevo.com:587 (STARTTLS) or smtps://...:465.
+   * Without it, notifications are shown in the app only. Never used in demo mode.
+   */
+  SMTP_URL: z
+    .string()
+    .regex(/^smtps?:\/\//, 'must start with smtp:// or smtps://')
+    .optional(),
+  /** Sender, e.g. "ToolTrace <alerts@your-company.com>". Must be a sender your mail provider accepts. */
+  MAIL_FROM: z.string().min(3).max(200).optional(),
+
   // --- Site ------------------------------------------------------------------
+  /** Currency of unit prices (ISO 4217). The A/B/C thresholds are in this currency. */
+  CURRENCY: z.string().regex(/^[A-Z]{3}$/).default('INR'),
   /**
    * The plant's time zone (IANA name). "Today" means today on the shop floor: calibration
    * due dates expire at local midnight, and a calibration done today is never "in the future".
@@ -101,6 +116,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   }
   if (parsed.data.NODE_ENV === 'production' && parsed.data.DEV_MQTT_BROKER_PORT) {
     throw new Error('Invalid configuration: DEV_MQTT_BROKER_PORT is for development only');
+  }
+  if (parsed.data.SMTP_URL && !parsed.data.MAIL_FROM) {
+    throw new Error('Invalid configuration: MAIL_FROM is required with SMTP_URL (e.g. "ToolTrace <alerts@your-company.com>")');
   }
   return parsed.data;
 }

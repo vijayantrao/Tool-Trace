@@ -8,10 +8,21 @@ import { EventEmitter } from 'node:events';
 import type { Sql } from '../db.js';
 
 export interface FloorEvent {
-  kind: 'checked_out' | 'returned' | 'tool_changed' | 'checkout_updated' | 'station_event';
+  kind:
+    | 'checked_out'
+    | 'returned'
+    | 'tool_changed'
+    | 'checkout_updated'
+    | 'station_event'
+    | 'notification'
+    | 'acknowledgement'
+    | 'stock_changed';
   toolId?: string;
   assetTag?: string;
   stationId?: string;
+  itemId?: string;
+  /** For a notification: the only person who receives this event. */
+  userId?: string;
   /** Who did it, so the browser can skip notifying the person who acted. */
   actorId?: string;
   message?: string;
@@ -23,6 +34,8 @@ interface Raw {
   checkoutId?: string;
   toolId?: string;
   stationId?: string;
+  itemId?: string;
+  userId?: string;
 }
 
 export class FloorEvents extends EventEmitter<{ event: [FloorEvent] }> {
@@ -94,6 +107,6 @@ export class FloorEvents extends EventEmitter<{ event: [FloorEvent] }> {
         at,
       };
     }
-    return { kind: raw.kind, toolId: raw.toolId, stationId: raw.stationId, at };
+    return { kind: raw.kind, toolId: raw.toolId, stationId: raw.stationId, itemId: raw.itemId, userId: raw.userId, at };
   }
 }

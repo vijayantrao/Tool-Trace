@@ -18,6 +18,7 @@ import { ApiError, toApiError } from '../lib/errors.js';
 import { enterAppRole, setActorUser } from '../middleware/db.js';
 import { normalizeUid } from '../lib/uid.js';
 import { checkOutTool, returnCheckout } from '../services/floor.js';
+import type { Notifier } from '../services/notify.js';
 import { decodeMasterKey, deriveStationKey, verify, type StationMessage } from './crypto.js';
 
 export const MAX_CLOCK_SKEW_MS = 5 * 60_000;
@@ -84,6 +85,8 @@ export class StationGateway {
     private readonly config: Config,
     /** Taps per station: short bursts allowed, sustained flooding refused. */
     private readonly limits = { burst: 10, perSecond: 4 },
+    /** Tells the crib when a tool comes back with a problem. */
+    private readonly notifier?: Notifier,
   ) {
     this.master = config.STATION_MASTER_KEY ? decodeMasterKey(config.STATION_MASTER_KEY) : null;
     this.topicPrefix = config.MQTT_TOPIC_PREFIX;
@@ -274,6 +277,14 @@ export class StationGateway {
             stationId,
           });
         });
+        if (problem && this.notifier) {
+          await this.notifier.send(tx, await this.notifier.staff(tx), {
+            kind: 'tool.problem_reported',
+            title: `${tool.assetTag} came back with a problem`,
+            body: `${session.displayName} returned it at ${station.name} and reported a problem. It is quarantined until someone inspects it.`,
+            link: `/tools/${tool.id}`,
+          });
+        }
         return problem
           ? respond('returned_problem', true, 'amber', `${tool.assetTag} returned`, 'Quarantined. Thanks', who)
           : respond('returned', true, 'green', `${tool.assetTag} returned`, 'Thank you', who);
@@ -288,7 +299,8 @@ export class StationGateway {
       const { code } = toApiError(err);
       if (code === 'calibration_expired') return respond(code, false, 'red', 'LOCKED', 'Calibration expired', who);
       if (code === 'tool_unavailable') {
-        return respond(code, false, 'red', 'Not available', tool.status === 'quarantined' ? 'Quarantined' : tool.status, who);
+        const why = { quarantined: 'Quarantined', at_calibration: 'At calibration lab', retired: 'Retired' }[tool.status] ?? tool.status;
+        return respond(code, false, 'red', 'Not available', why, who);
       }
       if (code !== 'internal_error') return respond(code, false, 'red', 'Not allowed', 'See the crib', who);
       throw err;

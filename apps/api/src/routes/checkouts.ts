@@ -1,7 +1,9 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { badRequest, conflict, forbidden, unauthorized } from '../lib/errors.js';
+import { requestAcknowledgement } from '../services/acknowledgements.js';
 import { checkOutTool, returnCheckout } from '../services/floor.js';
+import { formatSiteTime } from '../lib/time.js';
 import { validate } from '../lib/validate.js';
 import { db } from '../middleware/db.js';
 import { currentUser, requireAuth, requireRole } from '../middleware/session.js';
@@ -11,7 +13,7 @@ const MAX_CHECKOUT_DAYS = 30;
 /** Offline actions older than this are refused (the database enforces the same bound). */
 const MAX_OFFLINE_HOURS = 24;
 
-export function checkoutRoutes(_deps: Deps) {
+export function checkoutRoutes({ notifier }: Deps) {
   const app = new Hono<AppEnv>();
 
   app.get(
@@ -35,8 +37,11 @@ export function checkoutRoutes(_deps: Deps) {
         SELECT c.id, c.tool_id, t.asset_tag, t.name AS tool_name,
                c.holder_id, h.display_name AS holder_name, c.issued_by,
                c.checked_out_at, c.due_back_at, c.returned_at, c.condition_on_return, c.notes,
-               (c.returned_at IS NULL AND c.due_back_at < now()) AS overdue
+               (c.returned_at IS NULL AND c.due_back_at < now()) AS overdue,
+               a.status AS ack_status, c.kit_issue_id
         FROM checkouts c
+        LEFT JOIN acknowledgements a ON (a.subject_type = 'checkout' AND a.subject_id = c.id)
+                                     OR (a.subject_type = 'kit_issue' AND a.subject_id = c.kit_issue_id)
         JOIN tools t ON t.id = c.tool_id
         JOIN users h ON h.id = c.holder_id
         WHERE (${holderId}::uuid IS NULL OR c.holder_id = ${holderId}::uuid)
@@ -87,13 +92,26 @@ export function checkoutRoutes(_deps: Deps) {
         throw conflict('invalid_due_date', `Checkouts can last at most ${MAX_CHECKOUT_DAYS} days`);
       }
 
-      const checkout = await checkOutTool(db(c), {
+      const tx = db(c);
+      const checkout = await checkOutTool(tx, {
         tool: b.toolId ? { id: b.toolId } : { assetTag: b.assetTag! },
         holderId,
         issuedBy: user.id,
         dueBackAt: due,
         offlineQueuedAt: queuedAt,
       });
+      // Issued to someone else: they confirm they really got it.
+      if (holderId !== user.id) {
+        const [t] = await tx<{ name: string }[]>`SELECT name FROM tools WHERE id = ${checkout.toolId}`;
+        await requestAcknowledgement(tx, notifier, {
+          subjectType: 'checkout',
+          subjectId: checkout.id,
+          userId: holderId,
+          requestedBy: user,
+          summary: `${checkout.assetTag} ${t!.name}`,
+          facts: [['Due back', formatSiteTime(due)]],
+        });
+      }
       return c.json({ checkout }, 201);
     },
   );

@@ -18,7 +18,8 @@ export function dashboardRoutes(_deps: Deps) {
         count(*) FILTER (WHERE status = 'available')::int                      AS available,
         count(*) FILTER (WHERE status = 'checked_out')::int                    AS checked_out,
         count(*) FILTER (WHERE status = 'quarantined')::int                    AS quarantined,
-        count(*) FILTER (WHERE status <> 'retired' AND requires_calibration
+        count(*) FILTER (WHERE status::text = 'at_calibration')::int           AS at_calibration,
+        count(*) FILTER (WHERE status::text NOT IN ('retired', 'at_calibration') AND requires_calibration
                            AND calibration_due_on < current_date)::int         AS calibration_expired,
         count(*) FILTER (WHERE status <> 'retired' AND requires_calibration
                            AND calibration_due_on >= current_date
@@ -31,6 +32,12 @@ export function dashboardRoutes(_deps: Deps) {
       FROM checkouts c JOIN tools t ON t.id = c.tool_id
       WHERE c.holder_id = ${user.id} AND c.returned_at IS NULL
       ORDER BY c.due_back_at`;
+    // What crib staff issued to me that I still have to confirm.
+    const myAcknowledgements = await sql`
+      SELECT a.id, a.subject_type, a.summary, a.created_at, r.display_name AS requested_by_name
+      FROM acknowledgements a JOIN users r ON r.id = a.requested_by
+      WHERE a.user_id = ${user.id} AND a.status = 'pending'
+      ORDER BY a.created_at`;
     // Crib staff and auditors also get a one-line summary of the model's view of the floor.
     let insights = null;
     if (['admin', 'storekeeper', 'auditor'].includes(user.role)) {
@@ -42,7 +49,7 @@ export function dashboardRoutes(_deps: Deps) {
             WHERE c.returned_at IS NULL AND r.loss_probability >= ${LOSS_RISK}) AS loss_risk,
           (SELECT count(*)::int FROM anomalies WHERE status = 'open') AS open_anomalies`;
     }
-    return c.json({ counts, myCheckouts, dueSoonDays: DUE_SOON_DAYS, insights });
+    return c.json({ counts, myCheckouts, myAcknowledgements, dueSoonDays: DUE_SOON_DAYS, insights });
   });
 
   return app;

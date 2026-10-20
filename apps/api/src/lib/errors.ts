@@ -27,6 +27,11 @@ interface PgError {
   constraint_name?: string;
 }
 
+/** Rules the database enforces itself (RAISE ... HINT = '<code>'), returned as 409 with that code. */
+const CONFLICT_HINTS = new Set([
+  'tool_unavailable', 'calibration_expired', 'stock_inactive', 'insufficient_stock', 'invalid_transition', 'tag_in_use',
+]);
+
 const isPgError = (e: unknown): e is PgError =>
   typeof e === 'object' && e !== null && 'code' in e && typeof (e as PgError).code === 'string';
 
@@ -45,9 +50,7 @@ export function toApiError(err: unknown): ApiError {
         return badRequest('invalid_input', 'Malformed identifier or value');
       case 'P0001':
         if (err.hint === 'uid_in_use') return conflict('uid_in_use', err.message ?? 'RFID tag already in use');
-        if (err.hint === 'tool_unavailable' || err.hint === 'calibration_expired') {
-          return conflict(err.hint, err.message ?? 'Rule violated');
-        }
+        if (err.hint && CONFLICT_HINTS.has(err.hint)) return conflict(err.hint, err.message ?? 'Rule violated');
     }
   }
   return new ApiError(500, 'internal_error', 'Something went wrong');

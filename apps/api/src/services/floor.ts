@@ -26,6 +26,8 @@ export async function checkOutTool(
     dueBackAt: Date;
     stationId?: string;
     offlineQueuedAt?: Date;
+    /** Part of issuing a whole kit. */
+    kitIssueId?: string;
   },
 ): Promise<CheckoutRow & { assetTag: string }> {
   const [holder] = await tx<{ isActive: boolean; role: string }[]>`
@@ -50,9 +52,9 @@ export async function checkOutTool(
   }
 
   const [row] = await tx<CheckoutRow[]>`
-    INSERT INTO checkouts (tool_id, holder_id, issued_by, due_back_at, issued_via_station_id, offline_queued_at)
+    INSERT INTO checkouts (tool_id, holder_id, issued_by, due_back_at, issued_via_station_id, offline_queued_at, kit_issue_id)
     VALUES (${tool.id}, ${input.holderId}, ${input.issuedBy}, ${input.dueBackAt}, ${input.stationId ?? null},
-            ${input.offlineQueuedAt ?? null})
+            ${input.offlineQueuedAt ?? null}, ${input.kitIssueId ?? null})
     RETURNING id, tool_id, holder_id, issued_by, checked_out_at, due_back_at`;
   // The tool's status is set to checked_out by a database trigger.
   return { ...row!, assetTag: tool.assetTag };

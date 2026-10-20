@@ -30,8 +30,8 @@ const signInAs = async (persona: string) => {
 
 describe('public demo', () => {
   it('tells the sign-in page whether this is the demo', async () => {
-    expect((await demo.client().get('/api/meta')).body).toEqual({ name: 'ToolTrace', demo: true });
-    expect((await normal.client().get('/api/meta')).body).toEqual({ name: 'ToolTrace', demo: false });
+    expect((await demo.client().get('/api/meta')).body).toEqual({ name: 'ToolTrace', demo: true, currency: 'INR' });
+    expect((await normal.client().get('/api/meta')).body).toEqual({ name: 'ToolTrace', demo: false, currency: 'INR' });
   });
 
   it('signs a visitor in as any of the four personas with one click', async () => {

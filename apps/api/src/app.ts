@@ -19,20 +19,31 @@ import { stationRoutes } from './routes/stations.js';
 import { toolRoutes } from './routes/tools.js';
 import { userRoutes } from './routes/users.js';
 import { DataSources } from './services/data-sources/sync.js';
+import { Notifier } from './services/notify.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { calibrationRoutes } from './routes/calibration.js';
+import { acknowledgementRoutes } from './routes/acknowledgements.js';
+import { stockRoutes } from './routes/stock.js';
+import { requestRoutes } from './routes/requests.js';
+import { kitRoutes } from './routes/kits.js';
+import { reportRoutes } from './routes/reports.js';
 import { StationGateway } from './stations/gateway.js';
 import type { AppEnv, Deps } from './types.js';
 
 export function createApp(
-  input: Omit<Deps, 'gateway' | 'limiter' | 'dataSources'> & {
+  input: Omit<Deps, 'gateway' | 'limiter' | 'dataSources' | 'notifier'> & {
     gateway?: Deps['gateway'];
     limiter?: Deps['limiter'];
     dataSources?: Deps['dataSources'];
+    notifier?: Deps['notifier'];
     sseHeartbeatMs?: number;
   },
 ) {
+  const notifier = input.notifier ?? new Notifier(input.config);
   const deps: Deps = {
     ...input,
-    gateway: input.gateway ?? new StationGateway(input.sql, input.config),
+    notifier,
+    gateway: input.gateway ?? new StationGateway(input.sql, input.config, undefined, notifier),
     limiter: input.limiter ?? new MemoryStore(),
     dataSources: input.dataSources ?? new DataSources(input.sql, input.config),
   };
@@ -53,11 +64,13 @@ export function createApp(
     await next();
     c.header('Cache-Control', 'no-store');
   });
-  // Small bodies everywhere, except a spreadsheet's worth of rows for a file import.
+  // Small bodies everywhere, except a spreadsheet's worth of rows for a file import and
+  // calibration certificates (3 MB files; the web proxy itself accepts at most 4.5 MB).
   const tooLarge = (c: Context) => errorResponse(c, new ApiError(413, 'payload_too_large', 'Request body too large'));
   const smallBody = bodyLimit({ maxSize: 64 * 1024, onError: tooLarge });
   const fileBody = bodyLimit({ maxSize: 4 * 1024 * 1024, onError: tooLarge });
-  app.use('*', (c, next) => (c.req.path === '/api/data-sources/files/import' ? fileBody(c, next) : smallBody(c, next)));
+  const bigBody = /^\/api\/(data-sources\/files\/import|lab\/results|calibration-jobs\/[^/]+\/results|calibration-records\/[^/]+\/certificate)$/;
+  app.use('*', (c, next) => (bigBody.test(c.req.path) ? fileBody(c, next) : smallBody(c, next)));
   app.use('*', originGuard(config.RP_ORIGINS));
 
   // Deployed behind the web app's proxy: refuse direct calls from the internet. This also makes
@@ -95,11 +108,17 @@ export function createApp(
   // (no identity yet) and the long-lived event stream are the exceptions.
   const inTransaction = requestTransaction(sql, config.TRUST_PROXY);
   // Public facts the sign-in page needs before anyone is signed in (and a cheap way to wake a sleeping server).
-  api.get('/meta', (c) => c.json({ name: config.RP_NAME, demo: config.DEMO_MODE }));
+  api.get('/meta', (c) => c.json({ name: config.RP_NAME, demo: config.DEMO_MODE, currency: config.CURRENCY }));
 
   // Data sources may wait on an outside database, so they run their own short transactions.
+  // The calibration lab's and the email answer links have no session: they run their own too.
   const outsideTransactions = (path: string) =>
-    path.startsWith('/api/auth/') || path === '/api/events' || path === '/api/meta' || path.startsWith('/api/data-sources');
+    path.startsWith('/api/auth/') ||
+    path === '/api/events' ||
+    path === '/api/meta' ||
+    path.startsWith('/api/data-sources') ||
+    path.startsWith('/api/lab/') ||
+    path.startsWith('/api/ack/');
   api.use('*', (c, next) => (outsideTransactions(c.req.path) ? next() : inTransaction(c, next)));
   // Offline replays: an action sent again with the same Idempotency-Key happens only once.
   const once = idempotency();
@@ -113,6 +132,13 @@ export function createApp(
   api.route('/', auditRoutes(deps));
   api.route('/', insightRoutes(deps));
   api.route('/', dataSourceRoutes(deps));
+  api.route('/', notificationRoutes(deps));
+  api.route('/', calibrationRoutes(deps));
+  api.route('/', acknowledgementRoutes(deps));
+  api.route('/', stockRoutes(deps));
+  api.route('/', requestRoutes(deps));
+  api.route('/', kitRoutes(deps));
+  api.route('/', reportRoutes(deps));
   api.route('/', eventRoutes(deps, input.sseHeartbeatMs));
   app.route('/api', api);
 

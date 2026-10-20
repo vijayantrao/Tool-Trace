@@ -22,6 +22,8 @@ export function eventRoutes({ sql, events }: Deps, heartbeatMs = 20_000) {
     return streamSSE(c, async (stream) => {
       let open = true;
       const send = (e: FloorEvent) => {
+        // A notification is only ever announced to the person it is for.
+        if (e.kind === 'notification' && e.userId !== user.id) return;
         if (open) void stream.writeSSE({ event: 'floor', data: JSON.stringify(e) });
       };
       events.on('event', send);
