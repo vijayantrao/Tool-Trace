@@ -32,6 +32,8 @@ export function LiveFloorProvider({ meId, children }: { meId: string; children: 
       void qc.invalidateQueries({ queryKey: ['tool'] });
       void qc.invalidateQueries({ queryKey: ['checkouts'] });
       void qc.invalidateQueries({ queryKey: keys.dashboard });
+      void qc.invalidateQueries({ queryKey: keys.kits });
+      void qc.invalidateQueries({ queryKey: ['kit'] });
     };
 
     const connect = () => {
@@ -43,6 +45,21 @@ export function LiveFloorProvider({ meId, children }: { meId: string; children: 
       });
       source.addEventListener('floor', (msg) => {
         const e = JSON.parse((msg as MessageEvent<string>).data) as FloorEvent;
+        if (e.kind === 'notification') {
+          void qc.invalidateQueries({ queryKey: keys.notifications });
+          return;
+        }
+        if (e.kind === 'acknowledgement') {
+          for (const queryKey of [keys.dashboard, ['acknowledgements'], ['tool'], ['checkouts'], keys.myStock, ['kit']]) {
+            void qc.invalidateQueries({ queryKey });
+          }
+          return;
+        }
+        if (e.kind === 'stock_changed') {
+          void qc.invalidateQueries({ queryKey: ['stock'] });
+          void qc.invalidateQueries({ queryKey: ['stock-item'] });
+          return;
+        }
         if (e.kind === 'station_event') {
           void qc.invalidateQueries({ queryKey: keys.stationEvents });
           void qc.invalidateQueries({ queryKey: keys.stations });

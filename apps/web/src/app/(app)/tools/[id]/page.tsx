@@ -2,18 +2,32 @@
 
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { ArrowLeft, Lock, QrCode } from 'lucide-react';
+import { ArrowLeft, Briefcase, ClipboardList, Lock, Pencil, QrCode } from 'lucide-react';
 import { useMemo, useState, type FormEvent } from 'react';
+import { AckButtons, AckLine } from '@/components/ack';
+import { AttachCertificate, CertificateLink, LabPanel, SendToLabForm } from '@/components/calibration-lab';
+import { PriceTag } from '@/components/price-tag';
+import { RequestForm } from '@/components/request-form';
 import { AssetTag, CalSticker, StatusTag, toolIcon } from '@/components/tool-visuals';
 import { DuePicker } from '@/components/due-picker';
 import { TagEditor } from '@/components/tag-editor';
 import { toast } from '@/components/toast';
-import { Button, ErrorNote, Field, Input, Panel, Select, Spinner } from '@/components/ui';
-import { ApiError, errorText } from '@/lib/api';
+import { Button, Dialog, ErrorNote, Field, Input, Panel, Select, Spinner } from '@/components/ui';
+import { ApiError, apiForm, errorText } from '@/lib/api';
 import { useOffline } from '@/lib/offline';
 import { newCheckoutItem } from '@/lib/outbox';
 import { formatDateTime, formatDay, relative, todayIso } from '@/lib/format';
-import { useCheckOut, useHolders, useRecordCalibration, useReturn, useSetToolTag, useTool, useUpdateToolStatus } from '@/lib/queries';
+import {
+  useCheckOut,
+  useHolders,
+  useLocations,
+  useRecordCalibration,
+  useReturn,
+  useSetToolTag,
+  useTool,
+  useUpdateTool,
+  useUpdateToolStatus,
+} from '@/lib/queries';
 import { can, useMe } from '@/lib/session';
 import type { Me, ReturnCondition, ToolDetail } from '@/lib/types';
 
@@ -28,6 +42,7 @@ export default function ToolPage() {
 
   const Icon = toolIcon(tool.category);
   const locked = tool.calibrationState === 'expired';
+  const makeModel = [tool.make, tool.model].filter(Boolean).join(' ');
 
   return (
     <div className="max-w-3xl">
@@ -43,17 +58,28 @@ export default function ToolPage() {
           <AssetTag tag={tool.assetTag} size="lg" />
           <h1 className="mt-2 text-[1.9rem] font-semibold md:text-[2.3rem]">{tool.name}</h1>
           <p className="text-muted">
-            {tool.category}, kept at {tool.homeLocationName}
+            {tool.category}
+            {makeModel ? `, ${makeModel}` : ''}, kept at {tool.homeLocationName}
           </p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <StatusTag status={tool.status} />
             <CalSticker state={tool.calibrationState} dueOn={tool.calibrationDueOn} size="md" />
+            <PriceTag price={tool.unitPrice} abcClass={tool.abcClass} />
+            {tool.kit && (
+              <Link
+                href={`/kits/${tool.kit.id}`}
+                className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-sm font-semibold ring-1 ring-inset ring-line hover:bg-panel"
+              >
+                <Briefcase className="size-3.5" aria-hidden /> In kit {tool.kit.assetTag}
+              </Link>
+            )}
           </div>
         </div>
       </header>
 
       <div className="flex flex-col gap-5">
         {tool.status === 'checked_out' && tool.openCheckout && <HolderPanel tool={tool} me={me!} />}
+        {tool.status === 'at_calibration' && <LabPanel tool={tool} canManage={can.manageTools(me?.role)} />}
         {tool.status === 'available' && locked && <LockedPanel tool={tool} />}
         {tool.status === 'available' && !locked && can.checkOut(me?.role) && <CheckOutPanel tool={tool} me={me!} />}
         {tool.status === 'quarantined' && <QuarantinePanel tool={tool} me={me!} />}
@@ -65,7 +91,7 @@ export default function ToolPage() {
           onSave={(rfidUid) => setTag.mutateAsync({ id: tool.id, rfidUid })}
           savedMessage={(uid) => (uid ? `RFID tag assigned to ${tool.assetTag}` : `RFID tag removed from ${tool.assetTag}`)}
         />
-        {can.manageTools(me?.role) && <ManagePanel tool={tool} />}
+        <ManagePanel tool={tool} me={me!} />
       </div>
     </div>
   );
@@ -115,6 +141,15 @@ function CheckOutPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
   return (
     <Panel className="p-5">
       <h2 className="text-2xl font-semibold">Check out</h2>
+      {tool.kit && (
+        <p className="mt-1 text-sm text-muted">
+          Part of kit {tool.kit.assetTag}.{' '}
+          <Link href={`/kits/${tool.kit.id}`} className="font-semibold text-ink underline">
+            Check out the whole kit
+          </Link>{' '}
+          or just this tool.
+        </p>
+      )}
       <form onSubmit={submit} className="mt-4 flex flex-col gap-5">
         {issue && (
           <Field label="Issue to" htmlFor="holder">
@@ -198,6 +233,17 @@ function HolderPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
           {relative(c.dueBackAt)}.
         </span>
       </p>
+      {c.acknowledgement && (
+        <div className="mt-3 flex flex-col gap-2">
+          <AckLine
+            status={c.acknowledgement.status}
+            who={c.holderId === me.id ? 'you' : c.holderName}
+            respondedAt={c.acknowledgement.respondedAt}
+            note={c.acknowledgement.note}
+          />
+          {c.acknowledgement.status === 'pending' && c.holderId === me.id && <AckButtons id={c.acknowledgement.id} />}
+        </div>
+      )}
 
       {can.receiveReturns(me.role) ? (
         <form onSubmit={submit} className="mt-5 flex flex-col gap-4 border-t border-line pt-5">
@@ -299,14 +345,17 @@ function QuarantinePanel({ tool, me }: { tool: ToolDetail; me: Me }) {
 
 function CalibrationPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
   const record = useRecordCalibration();
-  const [open, setOpen] = useState(tool.calibrationState === 'expired');
+  const staff = can.manageTools(me.role);
+  const [mode, setMode] = useState<'none' | 'record' | 'send'>(tool.calibrationState === 'expired' && staff && tool.status !== 'at_calibration' ? 'send' : 'none');
   const [error, setError] = useState('');
-  const canRecord = can.manageTools(me.role) && tool.status !== 'checked_out';
+  const canRecord = staff && tool.status !== 'checked_out' && tool.status !== 'at_calibration';
+  const canSend = staff && (tool.status === 'available' || tool.status === 'quarantined');
 
   async function submit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError('');
     const f = new FormData(e.currentTarget);
+    const file = f.get('certificate');
     try {
       const { tool: t } = await record.mutateAsync({
         id: tool.id,
@@ -314,8 +363,15 @@ function CalibrationPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
         performedBy: String(f.get('performedBy')).trim(),
         certificateRef: String(f.get('certificateRef')).trim() || undefined,
       });
+      if (file instanceof File && file.size > 0 && t.calibrations[0]) {
+        const form = new FormData();
+        form.append('certificate', file);
+        await apiForm(`/calibration-records/${t.calibrations[0].id}/certificate`, form).catch((err) => {
+          toast(`Calibration saved, but the certificate was not: ${errorText(err)}`, 'error');
+        });
+      }
       toast(`Calibration recorded. Next due ${t.calibrationDueOn ? formatDay(t.calibrationDueOn) : ''}`);
-      setOpen(false);
+      setMode('none');
     } catch (err) {
       setError(errorText(err));
     }
@@ -325,10 +381,19 @@ function CalibrationPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
     <Panel className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-2xl font-semibold">Calibration</h2>
-        {canRecord && !open && (
-          <Button variant="quiet" onClick={() => setOpen(true)}>
-            Record calibration
-          </Button>
+        {mode === 'none' && (
+          <div className="flex flex-wrap gap-2">
+            {canSend && (
+              <Button variant="quiet" onClick={() => setMode('send')}>
+                Send for calibration
+              </Button>
+            )}
+            {canRecord && (
+              <Button variant="quiet" onClick={() => setMode('record')}>
+                Record calibration
+              </Button>
+            )}
+          </div>
         )}
       </div>
       <p className="mt-1 text-muted">
@@ -336,7 +401,10 @@ function CalibrationPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
         {tool.calibrationDueOn && `Next due ${formatDay(tool.calibrationDueOn)}.`}
       </p>
 
-      {open && canRecord && (
+      {/* Stays open once the tool is at the lab, so the one-time link can still be copied. */}
+      {mode === 'send' && (canSend || tool.status === 'at_calibration') && <SendToLabForm tool={tool} onClose={() => setMode('none')} />}
+
+      {mode === 'record' && canRecord && (
         <form onSubmit={submit} className="mt-4 grid gap-4 rounded-md bg-board p-4 sm:grid-cols-2">
           <Field label="Calibration date" htmlFor="calibratedOn">
             <Input id="calibratedOn" name="calibratedOn" type="date" max={todayIso()} defaultValue={todayIso()} required />
@@ -344,18 +412,19 @@ function CalibrationPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
           <Field label="Calibrated by" htmlFor="performedBy">
             <Input id="performedBy" name="performedBy" required maxLength={120} placeholder="External Calibration Lab" />
           </Field>
-          <div className="sm:col-span-2">
-            <Field label="Certificate number (optional)" htmlFor="certificateRef">
-              <Input id="certificateRef" name="certificateRef" maxLength={120} placeholder="CAL-2026-0042" />
-            </Field>
-          </div>
+          <Field label="Certificate number (optional)" htmlFor="certificateRef">
+            <Input id="certificateRef" name="certificateRef" maxLength={120} placeholder="CAL-2026-0042" />
+          </Field>
+          <Field label="Certificate file (optional)" htmlFor="certificateFile" hint="PDF, JPEG or PNG, up to 3 MB.">
+            <Input id="certificateFile" name="certificate" type="file" accept="application/pdf,image/jpeg,image/png" className="py-2" />
+          </Field>
           <div className="flex flex-col gap-3 sm:col-span-2">
             <ErrorNote>{error}</ErrorNote>
             <div className="flex gap-2">
               <Button type="submit" busy={record.isPending}>
                 Save calibration
               </Button>
-              <Button type="button" variant="quiet" onClick={() => setOpen(false)}>
+              <Button type="button" variant="quiet" onClick={() => setMode('none')}>
                 Cancel
               </Button>
             </div>
@@ -366,12 +435,19 @@ function CalibrationPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
       {tool.calibrations.length > 0 ? (
         <ol className="mt-4 divide-y divide-line border-t border-line">
           {tool.calibrations.map((c) => (
-            <li key={c.id} className="flex flex-wrap justify-between gap-x-4 gap-y-1 py-3 text-sm">
+            <li key={c.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-3 text-sm">
               <span>
                 <span className="font-semibold">{formatDay(c.calibratedOn)}</span> by {c.performedBy}
               </span>
-              <span className="text-muted">
-                {c.certificateRef ? `Cert ${c.certificateRef}, ` : ''}valid to {formatDay(c.dueOn)}
+              <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-muted">
+                <span>
+                  {c.certificateRef ? `Cert ${c.certificateRef}, ` : ''}valid to {formatDay(c.dueOn)}
+                </span>
+                {c.certificateFile ? (
+                  <CertificateLink recordId={c.id} fileName={c.certificateFile} />
+                ) : (
+                  staff && <AttachCertificate recordId={c.id} />
+                )}
               </span>
             </li>
           ))}
@@ -385,8 +461,11 @@ function CalibrationPanel({ tool, me }: { tool: ToolDetail; me: Me }) {
 
 /* ---------- Manage ---------- */
 
-function ManagePanel({ tool }: { tool: ToolDetail }) {
+function ManagePanel({ tool, me }: { tool: ToolDetail; me: Me }) {
   const update = useUpdateToolStatus();
+  const [editing, setEditing] = useState(false);
+  const [requesting, setRequesting] = useState(false);
+  const staff = can.manageTools(me.role);
   const set = async (status: 'quarantined' | 'retired' | 'available', msg: string) => {
     try {
       await update.mutateAsync({ id: tool.id, status });
@@ -395,29 +474,121 @@ function ManagePanel({ tool }: { tool: ToolDetail }) {
       toast(errorText(err), 'error');
     }
   };
+  if (!staff && !can.makeRequests(me.role)) return null;
   return (
     <div className="flex flex-wrap gap-2 border-t border-line pt-5">
-      <Link
-        href={`/labels?ids=${tool.id}`}
-        className="inline-flex min-h-11 items-center gap-2 rounded-md px-4 font-semibold ring-1 ring-inset ring-line hover:bg-panel"
-      >
-        <QrCode className="size-4" aria-hidden /> Print QR label
-      </Link>
-      {tool.status === 'available' && (
+      {staff && (
+        <>
+          <Link
+            href={`/labels?ids=${tool.id}`}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md px-4 font-semibold ring-1 ring-inset ring-line hover:bg-panel"
+          >
+            <QrCode className="size-4" aria-hidden /> Print QR label
+          </Link>
+          <Button variant="quiet" onClick={() => setEditing(true)}>
+            <Pencil className="size-4" aria-hidden /> Edit details
+          </Button>
+        </>
+      )}
+      {can.makeRequests(me.role) && tool.status !== 'retired' && (
+        <Button variant="quiet" onClick={() => setRequesting(true)}>
+          <ClipboardList className="size-4" aria-hidden /> Request replacement
+        </Button>
+      )}
+      {staff && tool.status === 'available' && (
         <Button variant="quiet" onClick={() => set('quarantined', `${tool.assetTag} quarantined`)}>
           Quarantine
         </Button>
       )}
-      {tool.status !== 'checked_out' && tool.status !== 'retired' && (
+      {staff && tool.status !== 'checked_out' && tool.status !== 'retired' && tool.status !== 'at_calibration' && (
         <Button variant="quiet" onClick={() => set('retired', `${tool.assetTag} retired`)}>
           Retire
         </Button>
       )}
-      {tool.status === 'retired' && (
+      {staff && tool.status === 'retired' && (
         <Button variant="quiet" onClick={() => set('available', `${tool.assetTag} back in service`)}>
           Return to service
         </Button>
       )}
+      <Dialog open={editing} onClose={() => setEditing(false)} title={`Edit ${tool.assetTag}`}>
+        <EditDetails tool={tool} onDone={() => setEditing(false)} />
+      </Dialog>
+      <Dialog open={requesting} onClose={() => setRequesting(false)} title={`Replace ${tool.assetTag}`}>
+        <RequestForm tool={tool} onDone={() => setRequesting(false)} />
+      </Dialog>
     </div>
+  );
+}
+
+function EditDetails({ tool, onDone }: { tool: ToolDetail; onDone: () => void }) {
+  const update = useUpdateTool();
+  const locations = useLocations();
+  const [error, setError] = useState('');
+
+  async function submit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError('');
+    const f = new FormData(e.currentTarget);
+    const text = (k: string) => String(f.get(k) ?? '').trim();
+    const price = text('unitPrice');
+    try {
+      await update.mutateAsync({
+        id: tool.id,
+        name: text('name'),
+        category: text('category'),
+        homeLocationId: text('homeLocationId'),
+        make: text('make') || null,
+        model: text('model') || null,
+        unitPrice: price ? Number(price) : null,
+      });
+      toast(`${tool.assetTag} updated`);
+      onDone();
+    } catch (err) {
+      setError(errorText(err));
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2">
+      <div className="sm:col-span-2">
+        <Field label="Name" htmlFor="editName">
+          <Input id="editName" name="name" required maxLength={120} defaultValue={tool.name} />
+        </Field>
+      </div>
+      <Field label="Category" htmlFor="editCategory">
+        <Input id="editCategory" name="category" required maxLength={60} defaultValue={tool.category} />
+      </Field>
+      <Field label="Kept at" htmlFor="editLocation">
+        <Select id="editLocation" name="homeLocationId" defaultValue={tool.homeLocationId}>
+          {locations.data?.map((l) => (
+            <option key={l.id} value={l.id}>
+              {l.name}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label="Make (optional)" htmlFor="editMake">
+        <Input id="editMake" name="make" maxLength={80} defaultValue={tool.make ?? ''} placeholder="Norbar" />
+      </Field>
+      <Field label="Model (optional)" htmlFor="editModel">
+        <Input id="editModel" name="model" maxLength={80} defaultValue={tool.model ?? ''} placeholder="TTi 100" />
+      </Field>
+      <div className="sm:col-span-2">
+        <Field label="Unit price (optional)" htmlFor="editPrice" hint="Sets the class: A above 15,000, B from 2,000 to 15,000, C below 2,000.">
+          <Input id="editPrice" name="unitPrice" type="number" min={0} step="0.01" inputMode="decimal" defaultValue={tool.unitPrice ?? ''} />
+        </Field>
+      </div>
+      <div className="flex flex-col gap-3 sm:col-span-2">
+        <ErrorNote>{error}</ErrorNote>
+        <div className="flex gap-2">
+          <Button type="submit" busy={update.isPending}>
+            Save
+          </Button>
+          <Button type="button" variant="quiet" onClick={onDone}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </form>
   );
 }

@@ -147,18 +147,27 @@ export function Dialog({
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  // Closing because `open` turned false is not the person dismissing it: don't report it back,
+  // or a dialog that hands over to another (add an item, then show it) would close that one too.
+  const closingFromProp = useRef(false);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
     if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
+    if (!open && d.open) {
+      closingFromProp.current = true;
+      d.close();
+    }
   }, [open]);
 
   return (
     <dialog
       ref={ref}
       aria-labelledby={titleId}
-      onClose={onClose}
+      onClose={() => {
+        if (closingFromProp.current) closingFromProp.current = false;
+        else onClose();
+      }}
       onClick={(e) => e.target === ref.current && onClose()}
       className="m-auto w-[min(34rem,calc(100vw-2rem))] rounded-xl border border-line bg-panel p-0 text-ink shadow-2xl backdrop:bg-black/45"
     >

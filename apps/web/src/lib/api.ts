@@ -40,6 +40,22 @@ export async function api<T>(
   return data as T;
 }
 
+/** Sends a form with a file (multipart). The browser sets the content type and boundary. */
+export async function apiForm<T>(path: string, form: FormData): Promise<T> {
+  let res: Response;
+  try {
+    res = await fetch(`/api${path}`, { method: 'POST', body: form, credentials: 'same-origin', cache: 'no-store' });
+  } catch {
+    throw new ApiError(0, 'network', 'No connection to the server. Check your network and try again.');
+  }
+  const data = await res.json().catch(() => null);
+  if (!res.ok) {
+    const e = data?.error;
+    throw new ApiError(res.status, e?.code ?? 'unknown', e?.message ?? `Request failed (${res.status})`, e?.details);
+  }
+  return data as T;
+}
+
 /** First field-level message if there is one, otherwise the general message. */
 export function errorText(err: unknown): string {
   if (err instanceof ApiError) {
@@ -63,4 +79,19 @@ const labelFor = (path: string) =>
     dueBackAt: 'Due back',
     performedBy: 'Calibrated by',
     calibratedOn: 'Calibration date',
+    unitPrice: 'Unit price',
+    make: 'Make',
+    model: 'Model',
+    labName: 'Lab',
+    labEmail: 'Lab email',
+    expectedBackOn: 'Expected back',
+    code: 'Code',
+    unit: 'Unit',
+    reorderLevel: 'Reorder level',
+    quantity: 'Quantity',
+    countedQuantity: 'Counted quantity',
+    note: 'Note',
+    title: 'What is needed',
+    estimatedCost: 'Estimated cost',
+    toolId: 'Tool',
   })[path] ?? path;

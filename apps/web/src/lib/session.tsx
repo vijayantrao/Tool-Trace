@@ -34,4 +34,11 @@ export const can = {
   seeAudit: (r?: Role) => r === 'admin' || r === 'auditor',
   seeInsights: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
   reviewAnomalies: (r?: Role) => r === 'admin' || r === 'storekeeper',
+  manageStock: (r?: Role) => r === 'admin' || r === 'storekeeper',
+  makeRequests: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'technician',
+  reviewRequests: (r?: Role) => r === 'admin' || r === 'storekeeper',
+  approveRequests: (r?: Role) => r === 'admin',
+  seeAllRequests: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
+  seeReports: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
+  seeLabJobs: (r?: Role) => r === 'admin' || r === 'storekeeper' || r === 'auditor',
 };

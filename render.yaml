@@ -49,5 +49,7 @@ services:
       # The plant's time zone: calibration dates expire at local midnight, not UTC midnight.
       - key: TOOLTRACE_SITE_TZ
         value: Asia/Kolkata
+      # Optional email (never sent in demo mode): add SMTP_URL (smtp://LOGIN:KEY@smtp-relay.brevo.com:587)
+      # and MAIL_FROM ("ToolTrace <alerts@your-company.com>") in the dashboard. See docs/DEPLOY.md, step 9.
       - key: SESSION_TTL_HOURS
         value: "8"

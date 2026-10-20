@@ -1,5 +1,6 @@
 export type Role = 'admin' | 'storekeeper' | 'technician' | 'auditor';
-export type ToolStatus = 'available' | 'checked_out' | 'quarantined' | 'retired';
+export type ToolStatus = 'available' | 'checked_out' | 'quarantined' | 'at_calibration' | 'retired';
+export type AbcClass = 'A' | 'B' | 'C';
 export type CalibrationState = 'not_required' | 'ok' | 'due_soon' | 'expired';
 export type ReturnCondition = 'ok' | 'damaged' | 'needs_calibration';
 
@@ -28,6 +29,28 @@ export interface Tool {
   dueBackAt: string | null;
   overdue: boolean;
   rfidUid: string | null;
+  unitPrice: number | null;
+  make: string | null;
+  model: string | null;
+  abcClass: AbcClass | null;
+}
+
+export type AckStatus = 'pending' | 'acknowledged' | 'disputed';
+
+export interface LabJob {
+  id: string;
+  labName: string;
+  labEmail: string | null;
+  notes: string | null;
+  status: 'at_lab' | 'calibrated' | 'received' | 'cancelled';
+  sentAt: string;
+  expectedBackOn: string;
+  late: boolean;
+  sentByName: string;
+  resultsVia: 'lab' | 'staff' | null;
+  resultsAt: string | null;
+  tokenExpiresAt: string | null;
+  calibrationRecordId: string | null;
 }
 
 export interface ToolDetail extends Tool {
@@ -38,6 +61,10 @@ export interface ToolDetail extends Tool {
     checkedOutAt: string;
     dueBackAt: string;
     overdue: boolean;
+    kitIssueId: string | null;
+    issuedBy: string;
+    issuedByName: string;
+    acknowledgement: { id: string; status: AckStatus; respondedAt: string | null; note: string | null; userId: string } | null;
   } | null;
   calibrations: {
     id: string;
@@ -45,7 +72,10 @@ export interface ToolDetail extends Tool {
     dueOn: string;
     certificateRef: string | null;
     performedBy: string;
+    certificateFile: string | null;
   }[];
+  labJob: LabJob | null;
+  kit: { id: string; assetTag: string; name: string } | null;
 }
 
 export interface Checkout {
@@ -61,6 +91,8 @@ export interface Checkout {
   conditionOnReturn: ReturnCondition | null;
   notes: string | null;
   overdue: boolean;
+  ackStatus: AckStatus | null;
+  kitIssueId: string | null;
 }
 
 export interface Location {
@@ -75,6 +107,7 @@ export interface Dashboard {
     available: number;
     checkedOut: number;
     quarantined: number;
+    atCalibration: number;
     calibrationExpired: number;
     calibrationDueSoon: number;
     overdue: number;
@@ -88,6 +121,7 @@ export interface Dashboard {
     dueBackAt: string;
     overdue: boolean;
   }[];
+  myAcknowledgements: PendingAck[];
   dueSoonDays: number;
   /** Staff and auditors only. */
   insights: { likelyLate: number; lossRisk: number; openAnomalies: number } | null;
@@ -154,8 +188,18 @@ export interface StationEvent {
 }
 
 export interface FloorEvent {
-  kind: 'checked_out' | 'returned' | 'tool_changed' | 'checkout_updated' | 'station_event';
+  kind:
+    | 'checked_out'
+    | 'returned'
+    | 'tool_changed'
+    | 'checkout_updated'
+    | 'station_event'
+    | 'notification'
+    | 'acknowledgement'
+    | 'stock_changed';
   toolId?: string;
+  itemId?: string;
+  userId?: string;
   assetTag?: string;
   stationId?: string;
   actorId?: string;
@@ -280,7 +324,17 @@ export type SourceKind = 'excel' | 'csv' | DbKind;
 export type TlsMode = 'verify' | 'require' | 'off';
 export type Schedule = 'manual' | 'hourly' | 'daily';
 export type DateOrder = 'dmy' | 'mdy';
-export type FieldKey = 'assetTag' | 'name' | 'category' | 'location' | 'calibrationIntervalDays' | 'lastCalibratedOn' | 'rfidUid';
+export type FieldKey =
+  | 'assetTag'
+  | 'name'
+  | 'category'
+  | 'location'
+  | 'calibrationIntervalDays'
+  | 'lastCalibratedOn'
+  | 'rfidUid'
+  | 'unitPrice'
+  | 'make'
+  | 'model';
 export type Mapping = Partial<Record<FieldKey, string>>;
 
 export interface ToolField {
@@ -380,4 +434,260 @@ export interface ConnectionInput {
   username: string;
   password: string;
   tls: TlsMode;
+}
+
+// ---- Notifications -------------------------------------------------------
+export interface AppNotification {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  link: string | null;
+  createdAt: string;
+  readAt: string | null;
+}
+
+export interface NotificationsInfo {
+  notifications: AppNotification[];
+  unread: number;
+  email: { available: boolean; enabled: boolean; address: string };
+}
+
+export interface EmailDelivery {
+  available: boolean;
+  pending: number;
+  sentLastWeek: number;
+  failed: number;
+  lastError: string | null;
+}
+
+// ---- Acknowledgements ----------------------------------------------------
+export interface PendingAck {
+  id: string;
+  subjectType: 'checkout' | 'stock_issue' | 'kit_issue';
+  summary: string;
+  createdAt: string;
+  requestedByName: string;
+}
+
+export interface AckRow extends PendingAck {
+  subjectId: string;
+  status: AckStatus;
+  respondedAt: string | null;
+  respondedVia: 'app' | 'email' | null;
+  note: string | null;
+  userId: string;
+  userName: string;
+}
+
+// ---- Calibration lab -------------------------------------------------------
+export interface LabJobRow {
+  id: string;
+  toolId: string;
+  assetTag: string;
+  toolName: string;
+  labName: string;
+  labEmail: string | null;
+  notes: string | null;
+  status: LabJob['status'];
+  sentAt: string;
+  expectedBackOn: string;
+  late: boolean;
+  sentByName: string;
+  resultsVia: 'lab' | 'staff' | null;
+  resultsAt: string | null;
+  outcome: 'passed' | 'failed' | null;
+  closedAt: string | null;
+}
+
+// ---- Stock -----------------------------------------------------------------
+export type StockKind = 'consumable' | 'ppe';
+
+export interface StockItem {
+  id: string;
+  code: string;
+  name: string;
+  kind: StockKind;
+  category: string;
+  unit: string;
+  locationId: string;
+  locationName: string;
+  quantity: number;
+  reorderLevel: number;
+  unitPrice: number | null;
+  abcClass: AbcClass | null;
+  isActive: boolean;
+  low: boolean;
+  stockValue: number | null;
+  updatedAt: string;
+}
+
+export interface StockMovement {
+  id: string;
+  kind: 'receive' | 'issue' | 'return' | 'adjust';
+  quantity: number;
+  balanceAfter: number;
+  note: string | null;
+  at: string;
+  issuedTo: string | null;
+  issuedToName: string | null;
+  byName: string;
+  ackStatus: AckStatus | null;
+}
+
+export interface MyStockIssue {
+  id: string;
+  itemId: string;
+  code: string;
+  name: string;
+  unit: string;
+  quantity: number;
+  at: string;
+  note: string | null;
+  byName: string;
+  ackStatus: AckStatus | null;
+  ackId: string | null;
+}
+
+// ---- Requests --------------------------------------------------------------
+export type RequestKind = 'new_tool' | 'replacement' | 'stock';
+export type RequestReason = 'new_requirement' | 'damaged' | 'missing' | 'kaizen' | 'used_up' | 'other';
+export type RequestStatus = 'submitted' | 'reviewed' | 'approved' | 'rejected' | 'fulfilled' | 'cancelled';
+
+export interface RequestRow {
+  id: string;
+  number: number;
+  kind: RequestKind;
+  reason: RequestReason;
+  title: string;
+  details: string | null;
+  quantity: number;
+  estimatedCost: number | null;
+  toolId: string | null;
+  toolAssetTag: string | null;
+  toolName: string | null;
+  stockItemId: string | null;
+  stockCode: string | null;
+  stockName: string | null;
+  status: RequestStatus;
+  createdAt: string;
+  updatedAt: string;
+  requestedBy: string;
+  requestedByName: string;
+  reviewedBy: string | null;
+  reviewedByName: string | null;
+  reviewedAt: string | null;
+  decidedBy: string | null;
+  decidedByName: string | null;
+  decidedAt: string | null;
+  closedByName: string | null;
+  closedAt: string | null;
+}
+
+export interface RequestEvent {
+  id: number;
+  action: 'submitted' | 'reviewed' | 'approved' | 'rejected' | 'fulfilled' | 'cancelled';
+  note: string | null;
+  at: string;
+  byName: string;
+}
+
+// ---- Kits ------------------------------------------------------------------
+export type KitState = 'in_crib' | 'out' | 'partial' | 'unavailable' | 'empty';
+
+export interface KitSummary {
+  id: string;
+  assetTag: string;
+  name: string;
+  homeLocationName: string;
+  isActive: boolean;
+  toolCount: number;
+  state: KitState;
+  holderName: string | null;
+  dueBackAt: string | null;
+}
+
+export interface KitTool {
+  id: string;
+  assetTag: string;
+  name: string;
+  category: string;
+  status: ToolStatus;
+  calibrationExpired: boolean;
+  calibrationDueOn: string | null;
+  checkoutId: string | null;
+  holderId: string | null;
+  holderName: string | null;
+  kitIssueId: string | null;
+  dueBackAt: string | null;
+  overdue: boolean | null;
+}
+
+export interface KitDetail {
+  id: string;
+  assetTag: string;
+  name: string;
+  homeLocationId: string;
+  homeLocationName: string;
+  isActive: boolean;
+  state: KitState;
+  tools: KitTool[];
+  openIssue: {
+    id: string;
+    holderId: string;
+    holderName: string;
+    issuedAt: string;
+    dueBackAt: string;
+    overdue: boolean;
+    issuedByName: string;
+    ackStatus: AckStatus | null;
+  } | null;
+}
+
+// ---- Reports ---------------------------------------------------------------
+export interface ReportSummary {
+  currency: string;
+  tools: {
+    count: number;
+    value: number;
+    valueOut: number;
+    valueOverdue: number;
+    valueQuarantined: number;
+    valueAtLab: number;
+    unpriced: number;
+    out: number;
+    calibrated: number;
+  };
+  byCategory: { category: string; count: number; value: number }[];
+  byClass: { class: AbcClass | 'none'; count: number; value: number }[];
+  weekly: { week: string; checkouts: number; lateReturns: number }[];
+  calibrationDue: { month: string; count: number }[];
+  calibration: { expired: number; dueSoon: number; atLab: number };
+  stock: { items: number; value: number; low: number };
+  openRequests: number;
+  approvedCost: number;
+  pendingAcks: number;
+  disputedAcks: number;
+}
+
+export type ExportDataset = 'tools' | 'checkouts' | 'calibrations' | 'stock' | 'movements' | 'requests' | 'audit';
+
+export interface CalibrationRegisterRow {
+  id: string;
+  assetTag: string;
+  name: string;
+  category: string;
+  make: string | null;
+  model: string | null;
+  location: string;
+  status: ToolStatus;
+  calibrationIntervalDays: number;
+  lastCalibratedOn: string | null;
+  calibrationDueOn: string;
+  calibrationState: 'ok' | 'due_soon' | 'expired';
+  performedBy: string | null;
+  certificateRef: string | null;
+  recordId: string | null;
+  hasCertificate: boolean;
+  atLab: string | null;
 }

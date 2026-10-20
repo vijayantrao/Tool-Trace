@@ -16,6 +16,11 @@ import sys
 
 import psycopg
 
+# The data is small (thousands of rows): one BLAS thread is fastest, and a thread pool per core
+# spins and crawls when the machine is shared (CI runners, a small server). Set before numpy loads.
+for _var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_var, "1")
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(

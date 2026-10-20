@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { Radar } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { PendingAcks } from '@/components/ack';
 import { ToolSlot, AssetTag } from '@/components/tool-visuals';
 import { ErrorNote, LinkButton, PageHeader, Spinner } from '@/components/ui';
 import { errorText } from '@/lib/api';
@@ -26,10 +27,12 @@ const filters: { id: Filter; label: string; test: (t: Tool) => boolean }[] = [
 function summary(tools: Tool[]): string {
   const out = tools.filter((t) => t.status === 'checked_out').length;
   const overdue = tools.filter((t) => t.overdue).length;
-  const locked = tools.filter((t) => t.calibrationState === 'expired').length;
+  const locked = tools.filter((t) => t.calibrationState === 'expired' && t.status !== 'at_calibration').length;
+  const atLab = tools.filter((t) => t.status === 'at_calibration').length;
   const parts = [`${out} of ${tools.length} ${tools.length === 1 ? 'tool is' : 'tools are'} out`];
   if (overdue) parts.push(`${overdue} overdue`);
   if (locked) parts.push(`${locked} locked for calibration`);
+  if (atLab) parts.push(`${atLab} at the calibration lab`);
   return parts.length === 1 ? `${parts[0]}.` : `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}.`;
 }
 
@@ -65,6 +68,8 @@ export default function BoardPage() {
           ) : undefined
         }
       />
+
+      <PendingAcks items={dash.data?.myAcknowledgements ?? []} />
 
       <InsightsLink counts={dash.data?.insights ?? null} />
 

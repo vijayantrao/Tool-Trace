@@ -114,7 +114,29 @@ Excel and CSV imports work everywhere, including the demo. Connections to MySQL,
 
 Database connections stay off in demo mode. For each connection, use a database account with only what it needs: read access to one table for imports, or the right to create and write one table for a copy.
 
-## 9. A real (non-demo) deployment
+## 9. Optional: email and reminders
+
+Every alert appears in the app's bell without any setup. To also send it by email (overdue tools, calibration due in 30 days, the lab's results link, "please confirm you received this", request decisions, the Monday summary and the monthly report), give the API an SMTP server. [Brevo](https://www.brevo.com)'s free plan sends 300 emails a day:
+
+1. Sign up at Brevo → **Senders, Domains & Dedicated IPs** → **Senders** → add and verify the address emails should come from.
+2. **SMTP & API** → **SMTP** tab → **Generate a new SMTP key**. Note the **Login** shown there (it looks like `8a1b2c001@smtp-brevo.com`).
+3. On Render → the service → **Environment**, add:
+
+   | Key | Value |
+   |---|---|
+   | `SMTP_URL` | `smtp://LOGIN:SMTP_KEY@smtp-relay.brevo.com:587`, with the `@` in the login written as `%40` |
+   | `MAIL_FROM` | `ToolTrace <the address you verified>` |
+   | `CURRENCY` | optional, a three-letter code such as `INR` (the default) or `EUR` |
+
+   Treat `SMTP_URL` as a password: paste it only into Render.
+
+The API log then says `email: on`. Each person can turn email off for themselves on the **Notifications** page; admins see the delivery queue there.
+
+**The public demo never sends email**, even with these set: `DEMO_MODE` turns it off so nobody can email strangers from the demo. Email needs the real deployment described in step 10.
+
+**Reminders while the API sleeps.** Render's free plan sleeps after 15 quiet minutes, and the reminder jobs only run while it is awake. [`wake.yml`](../.github/workflows/wake.yml) pings it every hour: on GitHub → **Settings** → **Secrets and variables** → **Actions** → **Variables** → add `API_HEALTH_URL` = `https://<your-service>.onrender.com/healthz`. Without it, reminders are sent the next time someone opens the app.
+
+## 10. A real (non-demo) deployment
 
 Use a **separate** Neon database, and on Render:
 

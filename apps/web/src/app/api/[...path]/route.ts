@@ -26,6 +26,9 @@ const FORWARD_RESPONSE = [
   'ratelimit-remaining',
   'retry-after',
   'x-accel-buffering',
+  // Calibration certificates are downloads, never shown inline on this origin.
+  'content-disposition',
+  'x-content-type-options',
 ];
 
 async function proxy(req: NextRequest, ctx: { params: Promise<{ path: string[] }> }) {

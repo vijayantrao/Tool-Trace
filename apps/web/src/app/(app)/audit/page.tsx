@@ -14,7 +14,12 @@ const FILTERS: { value: string; label: string }[] = [
   { value: '', label: 'Everything' },
   { value: 'auth.', label: 'Sign-ins' },
   { value: 'tool.', label: 'Tools and check-outs' },
-  { value: 'calibration.', label: 'Calibrations' },
+  { value: 'calibration.', label: 'Calibrations and lab' },
+  { value: 'issue.', label: 'Issue confirmations' },
+  { value: 'kit.', label: 'Kits' },
+  { value: 'stock.', label: 'PPE and stock' },
+  { value: 'request.', label: 'Requests' },
+  { value: 'notifications.', label: 'Email settings' },
   { value: 'user.', label: 'People' },
   { value: 'invite.', label: 'Invites' },
   { value: 'station.', label: 'Stations' },
@@ -244,6 +249,16 @@ function describeChanges(changes: unknown): string {
           return `schedule ${str(from)} → ${str(to)}`;
         case 'mapping':
           return 'column matching changed';
+        case 'unit_price':
+          return to === null ? 'price removed' : `price ${from === null ? 'set to' : `${str(from)} →`} ${str(to)}`;
+        case 'make':
+          return `make ${str(from) || '–'} → ${str(to) || '–'}`;
+        case 'model':
+          return `model ${str(from) || '–'} → ${str(to) || '–'}`;
+        case 'reorder_level':
+          return `reorder level ${str(from)} → ${str(to)}`;
+        case 'unit':
+          return `unit ${str(from)} → ${str(to)}`;
         default:
           return `${field} changed`;
       }
@@ -311,6 +326,57 @@ function describe(e: AuditEntry): string {
       const what = e.action === 'data.tools_imported' ? `Imported tools from ${str(d.source)}` : `Copied tools to ${str(d.source)}`;
       return `${what}${d.trigger === 'schedule' ? ' (scheduled)' : ''}: ${d.ok ? str(s.message) : `failed, ${str(s.message)}`}`;
     }
+    case 'calibration.sent':
+      return `${subject} sent to ${str(d.lab)} for calibration${d.expectedBackOn ? `, expected back ${formatDay(str(d.expectedBackOn))}` : ''}${d.linkIssued ? ' (lab link emailed)' : ''}`;
+    case 'calibration.results_entered':
+      return `Calibration results for ${subject} entered ${d.via === 'lab' ? `by ${str(d.lab)} through its link` : 'by the crib'}`;
+    case 'calibration.received':
+      return `${subject} back from ${str(d.lab)}${d.outcome === 'failed' ? ': failed calibration, quarantined' : ''}`;
+    case 'calibration.cancelled':
+      return `Calibration at ${str(d.lab)} cancelled for ${subject}`;
+    case 'calibration.link_reissued':
+      return `New lab link sent to ${str(d.lab)} for ${subject}`;
+    case 'calibration.certificate_added':
+      return `Certificate ${str(d.fileName)} added for ${subject}${d.via === 'lab' ? ' by the lab' : ''}`;
+    case 'issue.acknowledged':
+      return `${str(d.summary)} confirmed as received${d.via === 'email' ? ' (from the email)' : ''}`;
+    case 'issue.disputed':
+      return `${str(d.summary)} reported as not received${d.note ? ` (“${str(d.note)}”)` : ''}`;
+    case 'stock.item_created':
+      return `Added ${d.kind === 'ppe' ? 'PPE' : 'stock'} item ${str(d.code)} ${str(d.name)}`;
+    case 'stock.item_updated':
+      return `${subject}: ${describeChanges(d.changes)}`;
+    case 'stock.received':
+      return `Received ${str(d.quantity)} of ${subject}, ${str(d.balanceAfter)} in stock`;
+    case 'stock.issued':
+      return `Issued ${Math.abs(Number(d.quantity))} of ${subject}, ${str(d.balanceAfter)} left`;
+    case 'stock.returned':
+      return `${str(d.quantity)} of ${subject} returned, ${str(d.balanceAfter)} in stock`;
+    case 'stock.adjusted':
+      return `Stock count of ${subject} corrected by ${Number(d.quantity) > 0 ? '+' : ''}${str(d.quantity)} to ${str(d.balanceAfter)}${d.note ? ` (“${str(d.note)}”)` : ''}`;
+    case 'request.submitted':
+    case 'request.reviewed':
+    case 'request.approved':
+    case 'request.rejected':
+    case 'request.fulfilled':
+    case 'request.cancelled': {
+      const verb = { submitted: 'raised', reviewed: 'reviewed and sent for approval', approved: 'approved', rejected: 'rejected', fulfilled: 'fulfilled', cancelled: 'cancelled' }[
+        e.action.slice('request.'.length)
+      ];
+      return `Request REQ-${String(d.number).padStart(4, '0')} ${verb}: ${str(d.title)}${d.note ? ` (“${str(d.note)}”)` : ''}`;
+    }
+    case 'kit.created':
+      return `Made kit ${str(d.assetTag)} ${str(d.name)}`;
+    case 'kit.updated':
+      return `${subject}: ${describeChanges(d.changes)}`;
+    case 'kit.tool_added':
+      return `${str(d.assetTag)} added to ${subject}`;
+    case 'kit.tool_removed':
+      return `${str(d.assetTag)} taken out of ${subject}`;
+    case 'kit.issued':
+      return `${subject} issued as a kit`;
+    case 'notifications.preferences_changed':
+      return `${subject} turned email ${d.email ? 'on' : 'off'}`;
     default:
       return e.action;
   }

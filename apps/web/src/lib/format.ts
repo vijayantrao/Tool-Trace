@@ -33,6 +33,7 @@ export const statusLabel: Record<ToolStatus, string> = {
   available: 'In the crib',
   checked_out: 'Checked out',
   quarantined: 'Quarantined',
+  at_calibration: 'At calibration lab',
   retired: 'Retired',
 };
 

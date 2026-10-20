@@ -16,6 +16,7 @@ On a real shop floor, tools go missing, get used past their calibration date, an
 - **Nobody can quietly rewrite history.** Every change lands in a hash-chained audit trail that even the database owner can't edit without it showing.
 - **It sees trouble coming.** A nightly Python model flags tools likely to come back late or go missing, and odd check-outs, with the reasons, for a person to act on.
 - **No signal on the shop floor? Keep working.** Check-outs made offline sync when the signal returns, exactly once.
+- **Runs the whole crib, not just the board.** Calibration labs, PPE and consumables, kits, purchase requests with approvals, issue receipts, costs and reports, with alerts in the app and by email.
 - **Start from the data you already have.** Import the tool list from an Excel workbook, a CSV file or a MySQL, PostgreSQL or SQL Server table (once or on a schedule), or have ToolTrace create and keep a copy table in your database for reports. Like Power Apps' "Start with data", but every imported row still passes the calibration lock and lands in the audit trail.
 
 > Status: **all 6 phases complete** and [live](https://tooltrace-vijayant.vercel.app). Deployable for free in about 20 minutes: see [Deploy your own](#deploy-your-own-free).
@@ -122,6 +123,23 @@ ToolTrace's own database stays the record, so importing never weakens the rules:
 - **Outside databases are never waited on while holding the audit lock**: reading happens first, then one short write transaction applies and records the result.
 
 On the public demo, Excel and CSV imports work; database connections are switched off.
+
+## Running the crib
+
+| Feature | What it does |
+|---|---|
+| **Notifications** | A bell in the app, and email when an SMTP server is set: tools overdue, calibration due within 30 days, a tool back from the lab, low stock, requests to review or approve, a Monday summary and a monthly report. Each person can turn email off. Repeats are suppressed. |
+| **Send for calibration** | Storekeepers send a tool to a lab: it shows as **At the lab** and can't be issued. The lab gets a single-use link (no account) to enter the date and certificate number and upload the certificate (PDF, JPG or PNG, up to 3 MB). When the tool is received back it unlocks, or goes to quarantine if it failed. |
+| **Issue confirmation** | When a storekeeper issues a tool, kit or PPE to someone, that person confirms "I have it" in the app or from a link in the email. "I didn't get it" alerts the crib at once. |
+| **Cost and A/B/C class** | Each tool can carry a price, make and model. A class follows from the price: **A** above 15,000, **B** 2,000 to 15,000, **C** below. |
+| **PPE and consumables** | Gloves, glasses, inserts, batteries: receive, issue to a person, take back, count. Every movement is kept with the balance after it; a count can't go below zero; low stock raises an alert. |
+| **Requests and approvals** | Anyone can ask for a new tool, a replacement (damaged, missing, kaizen) or stock. A storekeeper reviews, an admin approves, and nobody can approve their own request: the database enforces the order. |
+| **Kits** | Tools that go out together get one QR label. One scan issues the whole kit; the return is checked piece by piece, and a missing tool is flagged. |
+| **Reports** | Value by category and class, use per week, calibrations due by month, and Excel downloads of every register. A printable calibration register for auditors. |
+
+![Reports: value by category and class, use per week, calibrations due, and Excel downloads](docs/screenshots/reports.png)
+
+All of it follows the same rules as the rest: row-level security, the hash-chained audit trail, and live updates on every screen. The lab and confirmation links store only a hash of their token, work once, and are rate-limited.
 
 ---
 
@@ -316,7 +334,7 @@ The bootstrap script prints a one-time admin invite link. It refuses to run once
 ## Tests
 
 ```bash
-# API: 140 tests. Needs a Postgres server; each test file creates and drops its own database.
+# API: 217 tests. Needs a Postgres server; each test file creates and drops its own database.
 # Add REDIS_TEST_URL=redis://localhost:6379 to also test shared rate limits on a real Redis.
 TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm test
 
@@ -324,7 +342,7 @@ TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres npm
 cd ml && pip install -r requirements-dev.txt
 TEST_DATABASE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres python -m pytest && cd ..
 
-# Browser: 23 end-to-end tests with real passkeys (first time: npx playwright install chromium).
+# Browser: 31 end-to-end tests with real passkeys (first time: npx playwright install chromium).
 # Runs the real ML job, so it needs the ML requirements installed (ML_PYTHON picks the interpreter).
 npm run build -w apps/web
 E2E_DATABASE_URL=postgres://postgres:postgres@localhost:5432/tooltrace_e2e npm run test:e2e
@@ -386,6 +404,7 @@ scripts/windows/        one-click launch and test scripts
 - [x] **Phase 5: Intelligence.** Python ML for late-return and loss risk, anomaly detection, offline sync
 - [x] **Phase 6: Launch.** Free-tier deployment, demo accounts, demo video
 - [x] **Data sources.** Import from Excel, CSV, MySQL, PostgreSQL and SQL Server, or keep a copy table; Excel template
+- [x] **Running the crib.** Notifications and email, calibration labs with certificates, issue confirmation, cost and A/B/C class, PPE and consumables, requests and approvals, kits, reports and Excel exports
 
 ---
 

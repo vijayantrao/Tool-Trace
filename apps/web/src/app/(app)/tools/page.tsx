@@ -4,11 +4,13 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Search } from 'lucide-react';
 import { Suspense, useDeferredValue, useState, type FormEvent } from 'react';
+import { ClassBadge } from '@/components/price-tag';
 import { AssetTag, CalSticker, StatusTag } from '@/components/tool-visuals';
 import { toast } from '@/components/toast';
 import { Button, Dialog, ErrorNote, Field, Input, PageHeader, Select, Spinner } from '@/components/ui';
 import { errorText } from '@/lib/api';
 import { relative, todayIso } from '@/lib/format';
+import { useMoney } from '@/lib/meta';
 import { useCreateTool, useLocations, useTools } from '@/lib/queries';
 import { can, useMe } from '@/lib/session';
 
@@ -19,7 +21,9 @@ function ToolsList() {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState(params.get('status') ?? '');
   const [calibration, setCalibration] = useState(params.get('calibration') ?? '');
-  const query = useDeferredValue({ q: q.trim(), status, calibration });
+  const [abcClass, setAbcClass] = useState(params.get('abcClass') ?? '');
+  const query = useDeferredValue({ q: q.trim(), status, calibration, abcClass });
+  const money = useMoney();
   const tools = useTools(query);
   const adding = params.get('add') === '1' && can.manageTools(me?.role);
 
@@ -35,7 +39,7 @@ function ToolsList() {
         }
       />
 
-      <div className="mb-4 grid gap-3 sm:grid-cols-[1fr_12rem_14rem]">
+      <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-[1fr_12rem_14rem_10rem]">
         <label className="relative">
           <span className="sr-only">Search tools</span>
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
@@ -52,6 +56,7 @@ function ToolsList() {
           <option value="available">In the crib</option>
           <option value="checked_out">Checked out</option>
           <option value="quarantined">Quarantined</option>
+          <option value="at_calibration">At calibration lab</option>
           <option value="retired">Retired</option>
         </Select>
         <Select value={calibration} onChange={(e) => setCalibration(e.target.value)} aria-label="Calibration">
@@ -60,6 +65,13 @@ function ToolsList() {
           <option value="due_soon">Calibration due soon</option>
           <option value="ok">Calibrated</option>
           <option value="not_required">No calibration needed</option>
+        </Select>
+        <Select value={abcClass} onChange={(e) => setAbcClass(e.target.value)} aria-label="Class">
+          <option value="">Any class</option>
+          <option value="A">Class A (above 15,000)</option>
+          <option value="B">Class B (2,000 to 15,000)</option>
+          <option value="C">Class C (below 2,000)</option>
+          <option value="none">No price yet</option>
         </Select>
       </div>
 
@@ -79,6 +91,7 @@ function ToolsList() {
                 <th className="px-4 py-3 font-semibold">Tool</th>
                 <th className="px-4 py-3 font-semibold">Where it is</th>
                 <th className="px-4 py-3 font-semibold">Calibration</th>
+                <th className="px-4 py-3 text-right font-semibold">Value</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
@@ -104,6 +117,13 @@ function ToolsList() {
                   <td className="block px-4 pb-3 pt-2 md:table-cell md:py-3">
                     <CalSticker state={t.calibrationState} dueOn={t.calibrationDueOn} />
                     {t.calibrationState === 'not_required' && <span className="text-sm text-muted">Not needed</span>}
+                  </td>
+                  <td className="block px-4 pb-3 md:table-cell md:py-3 md:text-right">
+                    {t.unitPrice !== null && (
+                      <span className="inline-flex items-center gap-1.5 text-sm tabular-nums">
+                        {money(t.unitPrice)} <ClassBadge abcClass={t.abcClass} />
+                      </span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -136,6 +156,9 @@ function AddToolForm({ onDone }: { onDone: (id: string) => void }) {
         category: String(f.get('category')).trim(),
         homeLocationId: String(f.get('homeLocationId')),
         requiresCalibration: cal,
+        ...(String(f.get('unitPrice') ?? '').trim() ? { unitPrice: Number(f.get('unitPrice')) } : {}),
+        ...(String(f.get('make') ?? '').trim() ? { make: String(f.get('make')).trim() } : {}),
+        ...(String(f.get('model') ?? '').trim() ? { model: String(f.get('model')).trim() } : {}),
         ...(cal
           ? {
               calibrationIntervalDays: Number(f.get('interval')),
@@ -190,6 +213,17 @@ function AddToolForm({ onDone }: { onDone: (id: string) => void }) {
           ))}
         </Select>
       </Field>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Field label="Make (optional)" htmlFor="make">
+          <Input id="make" name="make" maxLength={80} placeholder="Norbar" />
+        </Field>
+        <Field label="Model (optional)" htmlFor="model">
+          <Input id="model" name="model" maxLength={80} placeholder="TTi 100" />
+        </Field>
+        <Field label="Unit price (optional)" htmlFor="unitPrice">
+          <Input id="unitPrice" name="unitPrice" type="number" min={0} step="0.01" inputMode="decimal" />
+        </Field>
+      </div>
 
       <label className="flex items-center gap-3 rounded-md border border-line px-3 py-3">
         <input type="checkbox" checked={cal} onChange={(e) => setCal(e.target.checked)} className="size-5 accent-machine" />

@@ -111,13 +111,17 @@ export async function downloadTemplate(fields: ToolField[], tools: Tool[] | null
     t.requiresCalibration ? t.calibrationIntervalDays : null,
     t.requiresCalibration ? dateOf(t.lastCalibratedOn) : null,
     uid(t.rfidUid),
+    t.unitPrice,
+    t.make,
+    t.model,
   ]);
   const help = [
     [{ value: 'Column', fontWeight: 'bold' as const }, { value: 'Required', fontWeight: 'bold' as const }, { value: 'Example', fontWeight: 'bold' as const }],
     ...fields.map((f) => [f.label, f.required ? 'Yes' : 'No', f.hint]),
     [],
     ['How the import works'],
-    ['Tools are matched by asset tag: a new tag adds a tool, an existing tag updates its name, category, location and RFID tag.'],
+    ['Tools are matched by asset tag: a new tag adds a tool, an existing tag updates its name, category, location, RFID tag, price, make and model.'],
+    ['Unit price sets the A/B/C class: A above 15,000, B from 2,000 to 15,000, C below 2,000.'],
     ['Nothing is ever deleted. Leave a cell empty to keep what ToolTrace already has.'],
     ['Calibration: enter both the interval (days, or "6 months") and the last calibration date, or neither.'],
     ['A newer "Last calibrated" date for an existing tool is recorded as a calibration, credited to this import.'],
@@ -129,11 +133,46 @@ export async function downloadTemplate(fields: ToolField[], tools: Tool[] | null
       {
         sheet: 'Tools',
         data: [header, ...rows],
-        columns: [{ width: 14 }, { width: 34 }, { width: 16 }, { width: 20 }, { width: 18 }, { width: 16 }, { width: 16 }],
+        columns: [{ width: 14 }, { width: 34 }, { width: 16 }, { width: 20 }, { width: 18 }, { width: 16 }, { width: 16 }, { width: 12 }, { width: 16 }, { width: 16 }],
         stickyRowsCount: 1,
         dateFormat: 'yyyy-mm-dd',
       },
       { sheet: 'How to fill this in', data: help, columns: [{ width: 30 }, { width: 10 }, { width: 60 }] },
     ],
   ).toFile(tools ? 'tooltrace-tools.xlsx' : 'tooltrace-tools-template.xlsx');
+}
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/;
+const stamp = new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
+
+/**
+ * One register as an Excel file: the API's column names become the header row.
+ * Dates stay dates, times are written as local time (yyyy-mm-dd hh:mm), yes/no stay readable.
+ */
+export async function downloadRows(sheet: string, rows: Record<string, unknown>[], fileName: string) {
+  const writeXlsxFile = (await import('write-excel-file/browser')).default;
+  const columns = rows.length ? Object.keys(rows[0]!) : ['(no rows)'];
+  const cell = (v: unknown) => {
+    if (v === null || v === undefined) return null;
+    if (typeof v === 'boolean') return v ? 'Yes' : 'No';
+    if (typeof v === 'number') return v;
+    const s = String(v);
+    if (DATE_ONLY.test(s)) return new Date(`${s}T00:00:00Z`);
+    if (TIMESTAMP.test(s)) return stamp.format(new Date(s)).replace(',', '');
+    return s;
+  };
+  const header = columns.map((c) => ({ value: c, fontWeight: 'bold' as const, backgroundColor: '#2F5546', color: '#FFFFFF' }));
+  const data = rows.map((r) => columns.map((c) => cell(r[c])));
+  await writeXlsxFile(
+    [
+      {
+        sheet: sheet.slice(0, 31),
+        data: [header, ...data],
+        columns: columns.map((c) => ({ width: Math.min(40, Math.max(10, c.length + 4)) })),
+        stickyRowsCount: 1,
+        dateFormat: 'yyyy-mm-dd',
+      },
+    ],
+  ).toFile(fileName);
 }

@@ -5,7 +5,12 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeftRight,
+  BarChart3,
+  Bell,
+  Briefcase,
+  ClipboardList,
   Database,
+  Package,
   FileClock,
   LayoutGrid,
   LogOut,
@@ -23,6 +28,7 @@ import { DemoBanner } from '@/components/demo-banner';
 import { OfflineBanner } from '@/components/offline-banner';
 import { api } from '@/lib/api';
 import { useOffline } from '@/lib/offline';
+import { useNotifications } from '@/lib/queries';
 import * as outbox from '@/lib/outbox';
 import { initials, roleLabel } from '@/lib/format';
 import { LiveBadge } from '@/lib/live';
@@ -41,9 +47,13 @@ const nav: NavItem[] = [
   { href: '/tools', label: 'Tools', icon: Wrench },
   { href: '/scan', label: 'Scan', icon: ScanLine },
   { href: '/checkouts', label: 'Checkouts', icon: ArrowLeftRight },
+  { href: '/kits', label: 'Kits', icon: Briefcase },
+  { href: '/stock', label: 'PPE & stock', icon: Package },
+  { href: '/requests', label: 'Requests', icon: ClipboardList },
   { href: '/labels', label: 'QR labels', icon: QrCode, show: (m) => can.manageTools(m.role) },
   { href: '/stations', label: 'Stations', icon: RadioTower, show: (m) => can.seeStations(m.role) },
   { href: '/insights', label: 'Insights', icon: Radar, show: (m) => can.seeInsights(m.role) },
+  { href: '/reports', label: 'Reports', icon: BarChart3, show: (m) => can.seeReports(m.role) },
   { href: '/people', label: 'People', icon: Users, show: (m) => can.seePeople(m.role) },
   { href: '/data', label: 'Data sources', icon: Database, show: (m) => can.manageData(m.role) },
   { href: '/audit', label: 'Audit trail', icon: FileClock, show: (m) => can.seeAudit(m.role) },
@@ -80,10 +90,13 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
       {/* Desktop rail */}
       <aside className="no-print sticky top-0 hidden h-dvh flex-col bg-machine text-machine-ink md:flex">
-        <Link href="/" className="px-6 pb-6 pt-7">
-          <Wordmark />
-        </Link>
-        <nav aria-label="Main" className="flex flex-1 flex-col gap-1 px-3">
+        <div className="flex items-center justify-between gap-2 px-6 pb-5 pt-7">
+          <Link href="/">
+            <Wordmark />
+          </Link>
+          <NotificationBell />
+        </div>
+        <nav aria-label="Main" className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-3">
           {items.map((n) => {
             const active = isActive(path, n.href);
             const scan = n.href === '/scan';
@@ -92,7 +105,7 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
                 key={n.href}
                 href={n.href}
                 aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-3 rounded-md px-3 py-2.5 font-medium transition-colors ${
+                className={`flex items-center gap-3 rounded-md px-3 py-2 font-medium transition-colors ${
                   scan
                     ? 'my-2 bg-safety text-safety-ink hover:brightness-105'
                     : active
@@ -133,8 +146,11 @@ export function AppShell({ me, children }: { me: Me; children: ReactNode }) {
         <Link href="/">
           <Wordmark small />
         </Link>
-        <span className="ml-auto mr-3">
+        <span className="ml-auto mr-2">
           <LiveBadge />
+        </span>
+        <span className="mr-2">
+          <NotificationBell />
         </span>
         <Link
           href="/more"
@@ -210,5 +226,25 @@ export function Wordmark({ small }: { small?: boolean }) {
         ToolTrace
       </span>
     </span>
+  );
+}
+
+/** The bell: how many notifications are unread, and a way to them. */
+export function NotificationBell() {
+  const { data } = useNotifications();
+  const unread = data?.unread ?? 0;
+  return (
+    <Link
+      href="/notifications"
+      className="relative grid size-10 place-items-center rounded-full bg-black/20 hover:bg-black/30"
+      aria-label={unread ? `Notifications: ${unread} unread` : 'Notifications'}
+    >
+      <Bell className="size-5" aria-hidden />
+      {unread > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 grid min-w-5 place-items-center rounded-full bg-safety px-1 text-[0.7rem] font-bold leading-5 text-safety-ink">
+          {unread > 99 ? '99+' : unread}
+        </span>
+      )}
+    </Link>
   );
 }

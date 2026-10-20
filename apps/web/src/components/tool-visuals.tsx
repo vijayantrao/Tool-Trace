@@ -62,11 +62,16 @@ export function StatusTag({ status }: { status: ToolStatus }) {
     available: 'bg-ok-soft text-ink',
     checked_out: 'bg-board text-ink ring-1 ring-inset ring-line',
     quarantined: 'bg-signal text-white',
+    at_calibration: 'bg-due-soft text-ink ring-1 ring-inset ring-safety',
     retired: 'bg-line text-muted',
   }[status];
-  const label = { available: 'In the crib', checked_out: 'Checked out', quarantined: 'Quarantined', retired: 'Retired' }[
-    status
-  ];
+  const label = {
+    available: 'In the crib',
+    checked_out: 'Checked out',
+    quarantined: 'Quarantined',
+    at_calibration: 'At calibration lab',
+    retired: 'Retired',
+  }[status];
   return (
     <span
       className={`relative inline-flex items-center py-1 pl-4 pr-2 text-[0.78rem] font-semibold leading-none ${style}`}
@@ -100,9 +105,10 @@ export function AssetTag({ tag, size = 'sm' }: { tag: string; size?: 'sm' | 'lg'
  */
 export function ToolSlot({ tool }: { tool: Tool }) {
   const Icon = toolIcon(tool.category);
-  const out = tool.status === 'checked_out';
+  const atLab = tool.status === 'at_calibration';
+  const out = tool.status === 'checked_out' || atLab;
   const quarantined = tool.status === 'quarantined';
-  const locked = tool.calibrationState === 'expired';
+  const locked = tool.calibrationState === 'expired' && !atLab;
 
   return (
     <Link
@@ -112,7 +118,13 @@ export function ToolSlot({ tool }: { tool: Tool }) {
       }`}
       aria-label={[
         `${tool.assetTag} ${tool.name}`,
-        out ? `checked out to ${tool.holderName}${tool.overdue ? ', overdue' : ''}` : quarantined ? 'quarantined' : 'in the crib',
+        atLab
+          ? 'at the calibration lab'
+          : out
+            ? `checked out to ${tool.holderName}${tool.overdue ? ', overdue' : ''}`
+            : quarantined
+              ? 'quarantined'
+              : 'in the crib',
         locked ? 'calibration expired, locked' : tool.calibrationState === 'due_soon' ? 'calibration due soon' : '',
       ]
         .filter(Boolean)
@@ -136,7 +148,9 @@ export function ToolSlot({ tool }: { tool: Tool }) {
       />
 
       <div className="min-h-[2.4rem] text-[0.82rem] leading-tight">
-        {out ? (
+        {atLab ? (
+          <span className="font-semibold text-ink">At calibration lab</span>
+        ) : out ? (
           <>
             <span className="block truncate font-semibold text-ink">{tool.holderName}</span>
             <span className={tool.overdue ? 'font-semibold text-signal' : 'text-muted'}>

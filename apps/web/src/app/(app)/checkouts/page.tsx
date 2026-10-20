@@ -72,7 +72,11 @@ function Row({ c }: { c: Checkout }) {
           <AssetTag tag={c.assetTag} />
           <span className="truncate">{c.toolName}</span>
         </span>
-        <span className="text-sm sm:w-40 sm:shrink-0">{c.holderName}</span>
+        <span className="text-sm sm:w-48 sm:shrink-0">
+          {c.holderName}
+          {!c.returnedAt && c.ackStatus === 'pending' && <span className="block text-xs text-muted">Not confirmed yet</span>}
+          {c.ackStatus === 'disputed' && <span className="block text-xs font-semibold text-signal">Says not received</span>}
+        </span>
         <span className={`text-sm sm:w-64 sm:shrink-0 sm:text-right ${c.overdue ? 'font-semibold text-signal' : 'text-muted'}`}>
           {c.returnedAt
             ? `${c.conditionOnReturn ? conditionText[c.conditionOnReturn] : 'Returned'} ${formatDateTime(c.returnedAt)}`

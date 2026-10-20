@@ -1,0 +1,38 @@
+name: Wake the API
+
+# Render's free plan puts the API to sleep after 15 quiet minutes. Its background jobs
+# (overdue alerts, calibration reminders, the weekly summary, the email queue) only run
+# while it is awake, so this pings it once an hour. Set the repository variable
+# API_HEALTH_URL to https://<your-service>.onrender.com/healthz to turn it on.
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: wake
+  cancel-in-progress: true
+
+jobs:
+  wake:
+    name: Ping /healthz
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      URL: ${{ vars.API_HEALTH_URL }}
+    steps:
+      - name: Ping
+        run: |
+          if [ -z "$URL" ]; then
+            echo "::notice title=Wake::API_HEALTH_URL is not set. Skipping."
+            exit 0
+          fi
+          # A cold start takes about a minute; retry until it answers.
+          for i in 1 2 3 4 5 6; do
+            if curl -fsS --max-time 60 "$URL"; then echo; exit 0; fi
+            sleep 20
+          done
+          echo "::warning title=Wake::$URL did not answer."

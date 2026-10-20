@@ -267,6 +267,8 @@ test('the audit trail shows who did what and proves nothing was altered', async 
 test('a technician with no signal checks tools out, and they sync when the signal returns', async () => {
   const { page, context } = tech;
   await page.goto('/scan');
+  // The signal drops after the page has loaded (not while it is still checking the sign-in).
+  await expect(page.getByLabel('Or type the asset tag')).toBeVisible();
   await context.setOffline(true);
   await expect(page.getByText("You're offline.")).toBeVisible();
 
@@ -320,6 +322,175 @@ test('the nightly model scores what is out and flags unusual check-outs for revi
   await expect(page.getByText(/Marked as fine by Ravi Kumar.*Night maintenance job/).first()).toBeVisible();
   await expectAccessible(page);
   await shot(page, 'insights', { fullPage: true });
+});
+
+test('a technician confirms the tool a storekeeper issued to them', async () => {
+  const { page } = tech;
+  await page.goto('/');
+  const pending = page.getByRole('region', { name: 'Please confirm what you were issued' });
+  const item = pending.getByRole('listitem').filter({ hasText: 'MM-0201' });
+  await expect(item).toContainText('Issued by Ravi Kumar');
+  await expectAccessible(page);
+  await item.getByRole('button', { name: 'I have it' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Thanks, confirmed' })).toBeVisible();
+  await expect(item).toHaveCount(0);
+});
+
+test('a tool goes to the calibration lab, the lab enters the result through its link, and the tool comes back', async ({ browser }) => {
+  const sql = postgres(DB_URL, { max: 1, onnotice: () => {} });
+  const [tool] = await sql<{ id: string }[]>`SELECT id FROM tools WHERE asset_tag = 'TW-0102'`;
+  await sql.end();
+
+  const { page } = storekeeper;
+  await page.goto(`/tools/${tool!.id}`);
+  await page.getByRole('button', { name: 'Send for calibration' }).click();
+  await page.getByLabel('Calibration lab').fill('Precision Calibration Labs');
+  await page.getByRole('button', { name: 'Send TW-0102 for calibration' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'TW-0102 is off the board' })).toBeVisible();
+  const link = await page.getByLabel('Lab link').inputValue();
+  expect(link).toMatch(/\/lab#token=[\w-]{40,}$/);
+  await expectAccessible(page);
+
+  // The lab has no account: a fresh browser with nothing but the link.
+  const labContext = await browser.newContext({ viewport: { width: 1280, height: 860 } });
+  const lab = await labContext.newPage();
+  await lab.goto(link);
+  await expect(lab.getByRole('heading', { name: 'Calibration result' })).toBeVisible();
+  await expect(lab).toHaveURL(/\/lab$/); // the token is wiped from the address bar
+  await expect(lab.getByText(/TW-0102.*Torque Wrench 60-340 Nm, sent to Precision Calibration Labs/)).toBeVisible();
+  await expectAccessible(lab);
+  await shot(lab, 'lab-link');
+  await lab.getByLabel('Calibrated by').fill('S. Iyer');
+  await lab.getByLabel('Certificate number').fill('PCL-2026-0917');
+  await lab.getByLabel('Certificate file').setInputFiles({
+    name: 'PCL-2026-0917.pdf',
+    mimeType: 'application/pdf',
+    buffer: Buffer.from('%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n'),
+  });
+  await lab.getByRole('button', { name: 'Send the result' }).click();
+  await expect(lab.getByRole('heading', { name: 'Thank you' })).toBeVisible();
+  // Single use: opening the link again (a fresh page load, as from the email) is refused.
+  const again = await labContext.newPage();
+  await again.goto(link);
+  await expect(again.getByText(/already been used/)).toBeVisible();
+  await labContext.close();
+
+  await page.reload();
+  await page.getByRole('button', { name: 'Received: back in service' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'TW-0102 is back on the board' })).toBeVisible();
+  await expect(page.getByText(/Cert PCL-2026-0917/)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Certificate' }).first()).toBeVisible();
+
+  await page.goto('/notifications');
+  await expect(page.getByText('Precision Calibration Labs calibrated TW-0102')).toBeVisible();
+  await expectAccessible(page);
+});
+
+test('PPE is stocked, issued to a technician, and confirmed by them', async () => {
+  const { page } = storekeeper;
+  await page.goto('/stock?add=1');
+  await page.getByLabel('Code', { exact: true }).fill('PPE-GLV-01');
+  await page.getByLabel('Name', { exact: true }).fill('Cut-resistant gloves');
+  await page.getByLabel('Category', { exact: true }).fill('Hand protection');
+  await page.getByLabel('Counted in').fill('pairs');
+  await page.getByLabel('On the shelf now').fill('20');
+  await page.getByLabel('Reorder at').fill('5');
+  await page.getByLabel('Unit price (optional)').fill('180');
+  await page.getByRole('button', { name: 'Add item' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Added PPE-GLV-01' })).toBeVisible();
+
+  const dialog = page.getByRole('dialog', { name: 'Stock item' });
+  await dialog.getByLabel('Issue to').selectOption({ label: 'Asha Verma' });
+  await dialog.getByLabel('Quantity (pairs)').fill('3');
+  await dialog.getByRole('button', { name: 'Issue', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'PPE-GLV-01: 17 pairs left' })).toBeVisible();
+  await expect(dialog.getByText('Issued 3 pairs to Asha Verma')).toBeVisible();
+  await expectAccessible(page);
+
+  // More than is on the shelf is refused.
+  await dialog.getByLabel('Issue to').selectOption({ label: 'Asha Verma' });
+  await dialog.getByLabel('Quantity (pairs)').fill('50');
+  await dialog.getByRole('button', { name: 'Issue', exact: true }).click();
+  await expect(dialog.getByText(/only 17|not enough|in stock/i).first()).toBeVisible();
+
+  await tech.page.goto('/stock');
+  const mine = tech.page.getByRole('region', { name: 'Issued to you' });
+  await expect(mine).toContainText('3 pairs Cut-resistant gloves');
+  await mine.getByRole('button', { name: 'I have it' }).click();
+  await expect(tech.page.getByRole('status').filter({ hasText: 'Thanks, confirmed' })).toBeVisible();
+  await expectAccessible(tech.page);
+});
+
+test('a replacement request is reviewed by the storekeeper and approved by the admin', async () => {
+  await tech.page.goto('/requests?new=1');
+  await tech.page.getByRole('button', { name: 'Replacement' }).click();
+  await tech.page.getByLabel('Tool to replace (asset tag)').fill('CR-0501');
+  await tech.page.getByLabel('Reason').selectOption('damaged');
+  await tech.page.getByLabel('What is needed').fill('Hydraulic Crimping Tool');
+  await tech.page.getByLabel('Details (optional)').fill('Die set cracked');
+  await tech.page.getByRole('button', { name: 'Send request' }).click();
+  await expect(tech.page.getByRole('status').filter({ hasText: /Request REQ-\d{4} sent for review/ })).toBeVisible();
+
+  const sk = storekeeper.page;
+  await sk.goto('/requests');
+  await sk.getByRole('button', { name: /Hydraulic Crimping Tool/ }).click();
+  await expect(sk.getByText('Die set cracked')).toBeVisible();
+  await expectAccessible(sk);
+  await sk.getByRole('button', { name: 'Pass on for approval' }).click();
+  await expect(sk.getByRole('status').filter({ hasText: 'Passed on for approval' })).toBeVisible();
+
+  const ad = admin.page;
+  await ad.goto('/requests');
+  await ad.getByRole('button', { name: /Hydraulic Crimping Tool/ }).click();
+  await expect(ad.getByText('Ravi Kumar reviewed it and passed it on for approval')).toBeVisible();
+  await ad.getByLabel('Note (optional)').fill('Order from the usual supplier');
+  await ad.getByRole('button', { name: 'Approve' }).click();
+  await expect(ad.getByRole('status').filter({ hasText: 'Approved' })).toBeVisible();
+  await expect(ad.getByText('“Order from the usual supplier”')).toBeVisible();
+});
+
+test('a kit goes out with one scan and comes back checked piece by piece', async () => {
+  const { page } = storekeeper;
+  await page.goto('/kits?add=1');
+  await page.getByLabel('Kit tag').fill('KIT-0001');
+  await page.getByLabel('Name', { exact: true }).fill('Inspection kit');
+  await page.getByLabel('Tools in it (asset tags)').fill('DFT-0401, BS-0601');
+  await page.getByRole('button', { name: 'Make the kit' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Kit KIT-0001 made with 2 tools' })).toBeVisible();
+  await expectAccessible(page);
+
+  await page.getByLabel('Issue to').selectOption({ label: 'Asha Verma' });
+  await page.getByRole('button', { name: 'Check out KIT-0001' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Kit KIT-0001 checked out (2 tools)' })).toBeVisible();
+
+  await page.getByRole('button', { name: 'All back, good' }).click();
+  await page.getByRole('button', { name: 'Receive KIT-0001' }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Kit KIT-0001 is back' })).toBeVisible();
+  await expectAccessible(page);
+});
+
+test('reports show what the crib is worth, download as Excel, and print the calibration register', async () => {
+  const { page } = admin;
+  await page.goto('/reports');
+  await expect(page.getByRole('heading', { name: 'Reports' })).toBeVisible();
+  await expect(page.getByText('Tools in service', { exact: true })).toBeVisible();
+  await expectAccessible(page);
+  const download = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Tool register' }).click();
+  expect((await download).suggestedFilename()).toMatch(/^tooltrace-tools-\d{4}-\d{2}-\d{2}\.xlsx$/);
+  await shot(page, 'reports', { fullPage: true });
+
+  await page.getByRole('link', { name: 'Calibration register' }).click();
+  await expect(page.getByRole('heading', { name: 'Calibration register' })).toBeVisible();
+  const row = page.getByRole('row').filter({ hasText: 'TW-0102' });
+  await expect(row).toContainText('PCL-2026-0917');
+  await expect(row.getByRole('link', { name: 'Certificate' })).toBeVisible();
+  await expectAccessible(page);
+
+  await page.goto('/audit');
+  await page.getByLabel('Show').selectOption({ label: 'Calibrations and lab' });
+  await expect(page.getByText(/TW-0102.*sent to Precision Calibration Labs/).first()).toBeVisible();
+  await expect(page.getByText(/Certificate PCL-2026-0917\.pdf added/).first()).toBeVisible();
 });
 
 test('technicians cannot reach admin-only screens', async () => {

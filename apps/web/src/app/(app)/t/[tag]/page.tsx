@@ -14,11 +14,19 @@ export default function TagRedirect() {
   const assetTag = decodeURIComponent(tag).toUpperCase();
   const q = useQuery({
     queryKey: ['by-tag', assetTag],
-    queryFn: async () => (await api<{ tool: ToolDetail }>(`/tools/by-tag/${encodeURIComponent(assetTag)}`)).tool,
+    // A tag is a tool's or a kit's (never both).
+    queryFn: async () => {
+      try {
+        return `/tools/${(await api<{ tool: ToolDetail }>(`/tools/by-tag/${encodeURIComponent(assetTag)}`)).tool.id}`;
+      } catch (err) {
+        if (!(err instanceof ApiError && err.status === 404)) throw err;
+        return `/kits/${(await api<{ kit: { id: string } }>(`/kits/by-tag/${encodeURIComponent(assetTag)}`)).kit.id}`;
+      }
+    },
   });
 
   useEffect(() => {
-    if (q.data) router.replace(`/tools/${q.data.id}`);
+    if (q.data) router.replace(q.data);
   }, [q.data, router]);
 
   if (q.isError) {

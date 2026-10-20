@@ -6,22 +6,29 @@ import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useMemo, useState } from 'react';
 import { Button, ErrorNote, PageHeader, Spinner } from '@/components/ui';
 import { errorText } from '@/lib/api';
-import { useTools } from '@/lib/queries';
-import type { Tool } from '@/lib/types';
+import { useKits, useTools } from '@/lib/queries';
 
 /** Printable sheet of QR labels. Each code opens the tool's page in ToolTrace. */
 function Labels() {
   const params = useSearchParams();
   const tools = useTools();
-  const preset = params.get('ids')?.split(',').filter(Boolean);
+  const kits = useKits();
+  const preset = [...(params.get('ids')?.split(',') ?? []), ...(params.get('kits')?.split(',') ?? [])].filter(Boolean);
   const [selected, setSelected] = useState<Set<string> | null>(null);
 
-  const active = useMemo(() => (tools.data ?? []).filter((t) => t.status !== 'retired'), [tools.data]);
+  // Kits get labels too: scanning one opens the kit.
+  const active = useMemo<LabelItem[]>(
+    () => [
+      ...(tools.data ?? []).filter((t) => t.status !== 'retired').map((t) => ({ id: t.id, assetTag: t.assetTag, name: t.name, kit: false })),
+      ...(kits.data ?? []).filter((k) => k.isActive).map((k) => ({ id: k.id, assetTag: k.assetTag, name: `Kit: ${k.name}`, kit: true })),
+    ],
+    [tools.data, kits.data],
+  );
   useEffect(() => {
-    if (selected === null && tools.data) setSelected(new Set(preset?.length ? preset : active.map((t) => t.id)));
-  }, [tools.data, selected, preset, active]);
+    if (selected === null && tools.data && kits.data) setSelected(new Set(preset.length ? preset : active.filter((t) => !t.kit).map((t) => t.id)));
+  }, [tools.data, kits.data, selected, preset, active]);
 
-  if (tools.isLoading || !selected) return <Spinner />;
+  if (tools.isLoading || kits.isLoading || !selected) return <Spinner />;
   if (tools.isError) return <ErrorNote>{errorText(tools.error)}</ErrorNote>;
 
   const chosen = active.filter((t) => selected.has(t.id));
@@ -70,7 +77,14 @@ function Labels() {
   );
 }
 
-function Label({ tool }: { tool: Tool }) {
+interface LabelItem {
+  id: string;
+  assetTag: string;
+  name: string;
+  kit: boolean;
+}
+
+function Label({ tool }: { tool: LabelItem }) {
   const [src, setSrc] = useState('');
   useEffect(() => {
     const url = `${window.location.origin}/t/${encodeURIComponent(tool.assetTag)}`;

@@ -7,6 +7,8 @@ export interface Meta {
   name: string;
   /** The public demo: one-click personas, fictional data, nightly reset. */
   demo: boolean;
+  /** ISO 4217 code of unit prices. */
+  currency?: string;
 }
 
 /**
@@ -21,3 +23,17 @@ export const useMeta = () =>
     retry: (count) => count < 30,
     retryDelay: 3000,
   });
+
+/** Money in the deployment's currency: ₹18,500. Prices are whole rupees unless they have paise. */
+export function useMoney() {
+  const currency = useMeta().data?.currency ?? 'INR';
+  return (n: number | null | undefined, opts: { compact?: boolean } = {}) => {
+    if (n === null || n === undefined) return '';
+    return new Intl.NumberFormat('en-IN', {
+      style: 'currency',
+      currency,
+      notation: opts.compact ? 'compact' : 'standard',
+      maximumFractionDigits: opts.compact ? 1 : Number.isInteger(n) ? 0 : 2,
+    }).format(n);
+  };
+}

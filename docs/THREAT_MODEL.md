@@ -88,6 +88,8 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Station pretends to be another station | Key is derived from the station's id; RLS lets a station update only its own row | `003_hardening.sql` policies `stations_update`, `station_events_insert` | `security.test.ts` "a station can only touch its own row and log only its own events" |
 | Someone signs in to the public demo's shared accounts | Intended: demo mode offers one-click personas. It is refused on any database not marked as a demo, and a database with real accounts can't be marked, so passwordless sign-in can never reach real data | `demo.test.ts` "refuses to turn a database with real accounts into a demo", "is off unless switched on" |
 | Technician records an action as someone else | RLS: a technician may only insert check-outs where holder = issuer = themselves | policy `checkouts_insert` | `security.test.ts` "a technician cannot pretend someone else issued the tool" |
+| A stranger enters calibration results for a tool | The lab's link carries a 32-byte random token in the URL fragment; only its SHA-256 is stored. It works for one job, only while the tool is at the lab, expires after 60 days, and is cleared once used or replaced | `routes/calibration.ts`, `008_calibration_lab.sql` | `calibration-lab.test.ts` "lets the lab enter the result… once, without an account", "a new link replaces the old one" |
+| Someone confirms receipt in another person's name | Confirmation links are single-use hashed tokens sent only to the person the item was issued to; in the app, RLS lets only that person answer. The answer is recorded as theirs | `009_acknowledgements.sql` | `acknowledgements.test.ts` "…from the email, once…" |
 
 ### T: Tampering (changing data you shouldn't)
 
@@ -114,6 +116,10 @@ Each row names the defense, where it is implemented, and the test that proves it
 | SQL injection through table or column names from an outside database | Names must match the server's own listing (information_schema), then are quoted for that dialect; values are always parameters | `services/data-sources/connectors.ts` | `data-source-connectors.test.ts` "refuses tables it did not list" |
 | ToolTrace overwrites someone else's table when creating a copy | A copy table is only written if it has ToolTrace's exact columns; otherwise the request is refused | `ensureMirrorTable()` | "never overwrites someone else's table" (MySQL, PostgreSQL, SQL Server) |
 | The ML job, or its credentials, used to change records | `tooltrace_ml` reads only the columns it learns from and writes only its own result tables; it can't update check-outs or call the audit writer | `004_intelligence.sql` | `ml/tests/test_database.py` "ml role reads only what it learns from" |
+| A request approved by the person who raised or reviewed it | A database trigger allows only forward moves (submitted → reviewed → approved → fulfilled), only an admin may approve, and CHECK constraints forbid the same person raising, reviewing and approving | `012_requests.sql` | `requests.test.ts` "never lets anyone sign off their own request…" |
+| Stock counts drift or go negative | Every movement is an immutable row; a trigger locks the item, applies the change, refuses to go below zero and records the balance after it. A correction must say why | `011_stock.sql` | `stock.test.ts` "never more than is in stock", "a correction that always says why" |
+| A calibration certificate is swapped after the fact | Certificates are immutable rows with their SHA-256 in the audit trail | `008_calibration_lab.sql` | `calibration-lab.test.ts` |
+| A tool at the lab is issued anyway | The tool's status is `at_calibration`, which the database check-out rule refuses like an expired calibration | `008_calibration_lab.sql` | `calibration-lab.test.ts` "takes the tool off the board…" |
 
 ### R: Repudiation ("I never did that")
 
@@ -146,6 +152,10 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Risk scores about people leak to colleagues | Scores, flags and model runs are readable by admins, storekeepers and auditors only, by row-level security. Technicians never see scores, not even their own | `intelligence.test.ts` "never shows technicians scores…" |
 | The ML job reads personal data it doesn't need | Column-level grants: no names, emails, notes, passkeys or audit log. Person ids are never model inputs | `ml/tests/test_database.py` |
 | Another person's queued actions sent with my session | Outbox items carry their owner's id and are only replayed by that person's session; signing out discards them (after a warning) | `lib/outbox.ts`, `lib/offline.tsx` |
+| Someone reads another person's notifications | RLS: notifications are readable and markable by their owner only; live events of kind `notification` go only to that person's streams | `notifications.test.ts` "only shows people their own notifications…" |
+| A malicious certificate file runs in the app's origin | Only PDF, JPEG and PNG are accepted, checked by their magic bytes (not the name), up to 3 MB. They are served as downloads (`Content-Disposition: attachment`, `nosniff`), never inline | `lib/files.ts` | `calibration-lab.test.ts` |
+| The public demo used to send email to strangers | Email is off whenever `DEMO_MODE` is on, whatever the settings | `services/mail.ts` | `notifications.test.ts` "…never emails from the public demo" |
+| A lab or confirmation token leaks through server logs | Tokens sit in the URL fragment, which browsers never send, and are wiped from the address bar once read | `(auth)/lab`, `(auth)/ack` pages |
 
 ### D: Denial of service
 
@@ -160,6 +170,8 @@ Each row names the defense, where it is implemented, and the test that proves it
 | Huge request bodies | 64 KB body limit (4 MB for a file import's rows); zod limits on every string and array |
 | A slow outside database stalls the crib | Outside databases are never contacted while holding the audit lock; 10 s connect and 30 s query timeouts; at most 10,000 rows read; 30 connection attempts per admin per minute |
 | Many long-lived event streams | Streams need a valid session, re-checked every heartbeat |
+| The lab or confirmation links are brute-forced | 20 requests per IP per minute on `/api/lab` and `/api/ack`; tokens have 256 bits of entropy |
+| An email outage blocks the crib | Emails go through an outbox table written in the same transaction and are sent afterwards; failures back off (1 minute up to 12 hours) and stop after 6 tries, and the admin is told |
 
 ### E: Elevation of privilege
 
@@ -192,16 +204,18 @@ Being honest about these is part of the design.
 13. **The public demo runs on free hosting**: the API sleeps when idle, and live event streams through the Vercel proxy end after 5 minutes (the browser reconnects automatically). Fine for a demo; a real deployment should use always-on hosting.
 14. **A copy table is as private as the database it lives in.** It holds tool names, locations and who has each tool. Grant access to it on purpose.
 15. **Scheduled syncs act as the admin who set them up**, and pause automatically if that person is deactivated or demoted. They run only while the API is running (on sleeping free hosting, that is "whenever it is awake").
-16. **Model risks** (synthetic training data, feedback loops, fairness, data poisoning by people shaping their own history) are covered in the [model card](ML.md). Mitigations: staff-only, explained, audited, never automatic.
+16. **Email is not end-to-end secure.** Alerts and the lab link travel through the mail provider. They hold only tool names, dates and single-use links; nothing in them signs anyone in.
+17. **Reminders run only while the API is awake.** On free hosting, the hourly `wake.yml` ping keeps them roughly on time; otherwise they go out the next time someone opens the app.
+18. **Model risks** (synthetic training data, feedback loops, fairness, data poisoning by people shaping their own history) are covered in the [model card](ML.md). Mitigations: staff-only, explained, audited, never automatic.
 
 ## 5. How this is verified continuously
 
 | Check | Where | Runs |
 |---|---|---|
-| 140 API integration tests (27 Phase 4 security tests, 14 for insights, reviews and idempotent replays, 12 for demo mode and the proxy gate) | `apps/api/test` | Every push |
+| 217 API integration tests (27 Phase 4 security tests, 14 for insights, reviews and idempotent replays, 12 for demo mode and the proxy gate, 35 for notifications, the calibration lab, confirmations, stock, requests, kits and reports) | `apps/api/test` | Every push |
 | The recorded product tour, run against a demo-mode stack behind the proxy secret | `apps/web/tour` | Every push |
 | 30 Python tests: no-leakage features, near-oracle accuracy, anomaly recall, and the ML role's privileges on a real PostgreSQL | `ml/tests` | Every push |
-| 23 browser tests with real passkeys and axe accessibility scans, including offline check-outs and the nightly model | `apps/web/e2e` | Every push |
+| 31 browser tests with real passkeys and axe accessibility scans, including offline check-outs, the nightly model, and the lab's single-use link | `apps/web/e2e` | Every push |
 | 58 firmware checks against shared signing vectors | `firmware/station/test/host` | Every push |
 | CodeQL (`security-extended`) for TypeScript, Python and the C++ station core | `security.yml` | Every push + weekly |
 | gitleaks over the full git history | `security.yml` | Every push + weekly |
