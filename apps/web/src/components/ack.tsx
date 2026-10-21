@@ -108,7 +108,7 @@ export function PendingAcks({ items }: { items: PendingAck[] }) {
       <ul className="flex flex-col divide-y divide-line overflow-hidden rounded-lg border-2 border-safety bg-panel">
         {items.map((a) => (
           <li key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-            <span className="min-w-0 flex-1">
+            <span className="min-w-[min(100%,15rem)] flex-1">
               <span className="block font-semibold">{a.summary}</span>
               <span className="text-sm text-muted">
                 Issued by {a.requestedByName} {relative(a.createdAt)}

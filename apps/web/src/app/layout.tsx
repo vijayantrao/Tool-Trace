@@ -8,7 +8,7 @@ import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: { default: 'ToolTrace', template: '%s | ToolTrace' },
-  description: 'Tool tracking and calibration control for the shop floor.',
+  description: 'Right tool. Right hands. Always calibrated. Tool tracking and calibration control for the shop floor.',
   applicationName: 'ToolTrace',
   appleWebApp: { capable: true, title: 'ToolTrace', statusBarStyle: 'default' },
   icons: {

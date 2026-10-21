@@ -1,6 +1,8 @@
 # ToolTrace
 
-**A smart tool-tracking and calibration platform for factory floors.**
+**Right tool. Right hands. Always calibrated.**
+
+Tool tracking, calibration control and tool-crib management for factory floors.
 
 [![CI](https://github.com/vijayantrao/Tool-Trace/actions/workflows/ci.yml/badge.svg)](https://github.com/vijayantrao/Tool-Trace/actions/workflows/ci.yml)
 [![Security](https://github.com/vijayantrao/Tool-Trace/actions/workflows/security.yml/badge.svg)](https://github.com/vijayantrao/Tool-Trace/actions/workflows/security.yml)

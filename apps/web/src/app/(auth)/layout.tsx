@@ -13,8 +13,11 @@ export default function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1fr_minmax(28rem,36rem)]">
       <div className="pegboard relative hidden flex-col justify-between p-12 lg:flex">
-        <div className="text-machine">
-          <Wordmark />
+        <div>
+          <div className="text-machine">
+            <Wordmark />
+          </div>
+          <p className="mt-3 text-xl font-semibold text-ink">Right tool. Right hands. Always calibrated.</p>
         </div>
         <div className="grid max-w-md grid-cols-2 gap-5">
           {outlines.map(({ Icon, tag, out }) => (

@@ -158,7 +158,7 @@ function MyIssues() {
       <ul className="divide-y divide-line overflow-hidden rounded-lg border border-line bg-panel">
         {(pending.length ? pending : recent).map((m) => (
           <li key={m.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
-            <span className="min-w-0 flex-1">
+            <span className="min-w-[min(100%,15rem)] flex-1">
               <span className="block font-semibold">
                 {m.quantity} {m.unit} {m.name}
               </span>
