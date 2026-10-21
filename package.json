@@ -1,7 +1,7 @@
 {
   "name": "tool-trace",
   "private": true,
-  "description": "Right tool. Right hands. Always calibrated. Tool tracking and calibration control for factory floors.",
+  "description": "Tool tracking and tool-crib management for factory floors",
   "workspaces": [
     "apps/*"
   ],

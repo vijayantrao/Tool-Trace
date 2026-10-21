@@ -4,7 +4,7 @@ export default function manifest(): MetadataRoute.Manifest {
   return {
     name: 'ToolTrace',
     short_name: 'ToolTrace',
-    description: 'Right tool. Right hands. Always calibrated. Tool tracking and calibration control for the shop floor.',
+    description: 'Tool tracking and tool-crib management for the shop floor.',
     start_url: '/',
     scope: '/',
     display: 'standalone',

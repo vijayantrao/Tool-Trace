@@ -22,7 +22,7 @@ test('ToolTrace product tour', async ({ page, context }) => {
     page,
     'ToolTrace',
     [
-      'Right tool. Right hands. Always calibrated.',
+      'Tool tracking and tool-crib management for factory floors',
       'Passkeys · ESP32 RFID stations · live updates · tamper-evident audit · nightly ML',
     ],
     5,
