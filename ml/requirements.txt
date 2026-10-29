@@ -1,6 +1,6 @@
 # Runtime dependencies, pinned exactly (Dependabot proposes updates).
 numpy==2.5.4
-pandas==3.0.6
+pandas==3.1.0
 scikit-learn==1.9.1
 psycopg[binary]==3.3.6
 # Time zones for containers without a system time zone database.
