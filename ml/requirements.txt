@@ -1,14 +1,14 @@
 # Runtime dependencies, pinned exactly (Dependabot proposes updates).
 numpy==2.5.4
-pandas==3.0.6
+pandas==3.1.0
 scikit-learn==1.9.1
 psycopg[binary]==3.3.6
 # Time zones for containers without a system time zone database.
-tzdata==2026.5
+tzdata==2026.6
 # Pulled in by the above, pinned for reproducible builds.
 cloudpickle==3.1.2
 joblib==1.6.0
-narwhals==2.27.1
+narwhals==2.28.0
 psycopg-binary==3.3.6
 python-dateutil==2.9.0.post0
 scipy==1.18.1
